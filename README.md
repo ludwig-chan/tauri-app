@@ -1,16 +1,88 @@
-# Tauri + Vue + TypeScript
+# 多功能桌面工具
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+一款轻量级的桌面效率工具集，为你提供一站式的效率解决方案：
 
-## Recommended IDE Setup
+- 📝 **智能待办清单**：帮你高效管理任务，不错过每个重要日程
+- 📋 **剪贴板增强**：支持多种格式，让复制粘贴更智能
+- 🚀 **快捷启动器**：快速启动常用应用，告别繁琐操作
+- 📂 **文件管理助手**：批量重命名文件，提高工作效率
+- 📷 **截图贴图神器**：区域截图、窗口截图、贴图功能一应俱全
+- ⏰ **定时截图工具**：自动截图，多显示器支持
+- 🎥 **便捷录屏功能**：区域录制、全屏录制，音频同步
 
-- [VS Code](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## 功能规划及开发进度
 
-## Type Support For `.vue` Imports in TS
+### 基础框架（进行中）
+- [ ] 项目基础搭建
+  - UI 框架选型和集成（Naive UI）
+  - Pinia 状态管理配置
+  - 路由系统搭建
+  - 项目结构规范
+  - Git 提交规范
 
-Since TypeScript cannot handle type information for `.vue` imports, they are shimmed to be a generic Vue component type by default. In most cases this is fine if you don't really care about component prop types outside of templates. However, if you wish to get actual prop types in `.vue` imports (for example to get props validation when using manual `h(...)` calls), you can enable Volar's Take Over mode by following these steps:
+### 第一阶段：核心功能
+- [ ] 待办清单（优先级：1）
+  - 支持添加/编辑/删除待办事项
+  - 任务分类管理
+  - 截止日期提醒
+  - 任务优先级设置
 
-1. Run `Extensions: Show Built-in Extensions` from VS Code's command palette, look for `TypeScript and JavaScript Language Features`, then right click and select `Disable (Workspace)`. By default, Take Over mode will enable itself if the default TypeScript extension is disabled.
-2. Reload the VS Code window by running `Developer: Reload Window` from the command palette.
+- [ ] 剪贴板管理（优先级：2）
+  - 剪贴板历史记录
+  - 支持文本、图片、文件
+  - 快捷键粘贴
+  - 固定重要内容
 
-You can learn more about Take Over mode [here](https://github.com/johnsoncodehk/volar/discussions/471).
+- [ ] 快捷启动器（优先级：3）
+  - 自定义常用应用快捷启动
+  - 支持快捷键配置
+  - 支持应用分类管理
+
+### 第二阶段：进阶功能
+- [ ] 批量文件重命名（优先级：4）
+  - 支持正则表达式匹配
+  - 支持序号重命名
+  - 支持日期格式重命名
+  - 支持拖拽文件
+
+- [ ] 截图工具（优先级：5）
+  - 区域截图
+  - 窗口截图
+  - 全屏截图
+  - 贴图功能
+
+### 第三阶段：高级功能
+- [ ] 定时截图（优先级：6）
+  - 自定义截图时间间隔
+  - 自定义保存路径
+  - 支持多显示器
+
+- [ ] 录屏功能（优先级：7）
+  - 区域录制
+  - 窗口录制
+  - 全屏录制
+  - 支持音频录制
+
+## 开发指南
+
+### 开发建议
+1. 每个功能模块独立开发，先实现核心功能
+2. 及时编写注释和文档
+3. 定期提交代码，保持提交信息清晰
+4. 按照优先级顺序开发，但可根据实际情况调整
+5. 注意性能优化和用户体验
+
+### 项目启动
+```bash
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run tauri dev
+
+# 仅启动前端开发服务器
+npm run dev
+
+# 构建应用
+npm run build
+```
