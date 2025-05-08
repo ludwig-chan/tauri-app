@@ -41,8 +41,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import Checkbox from '../components/ui/Checkbox.vue'
+import { execSQL, selectSQL } from '../utils/db'
+import { initializeTodoTable } from '../utils/initDb'
 
 interface TodoItem {
   id: number
@@ -55,27 +57,75 @@ interface TodoItem {
 const newTodo = ref('')
 const todos = ref<TodoItem[]>([])
 const editInput = ref<HTMLInputElement | null>(null)
-let nextId = 1
 
-const addTodo = () => {
+// 初始化数据库和加载待办事项
+onMounted(async () => {
+  try {
+    await initializeTodoTable()
+    await loadTodos()
+  } catch (error) {
+    console.error('初始化失败:', error)
+  }
+})
+
+// 从数据库加载所有待办事项
+const loadTodos = async () => {
+  try {
+    const result = await selectSQL<TodoItem>('SELECT id, content, completed FROM todos ORDER BY id DESC')
+    todos.value = result.map(todo => ({
+      ...todo,
+      completed: Boolean(todo.completed),
+      editing: false
+    }))
+  } catch (error) {
+    console.error('加载待办事项失败:', error)
+  }
+}
+
+const addTodo = async () => {
   if (!newTodo.value.trim()) return
   
-  todos.value.push({
-    id: nextId++,
-    content: newTodo.value,
-    completed: false,
-    editing: false
-  })
-  newTodo.value = ''
+  try {
+    const result = await execSQL(
+      'INSERT INTO todos (content, completed) VALUES (?, ?) RETURNING id',
+      [newTodo.value, false]
+    )
+    
+    const id = result.lastInsertId
+    todos.value.unshift({
+      id,
+      content: newTodo.value,
+      completed: false,
+      editing: false
+    })
+    newTodo.value = ''
+  } catch (error) {
+    console.error('添加待办事项失败:', error)
+  }
 }
 
-const toggleTodo = (id: number) => {
+const toggleTodo = async (id: number) => {
   const todo = todos.value.find(t => t.id === id)
-  if (todo) todo.completed = !todo.completed
+  if (todo) {
+    try {
+      await execSQL(
+        'UPDATE todos SET completed = ? WHERE id = ?',
+        [!todo.completed, id]
+      )
+      todo.completed = !todo.completed
+    } catch (error) {
+      console.error('更新待办事项状态失败:', error)
+    }
+  }
 }
 
-const deleteTodo = (id: number) => {
-  todos.value = todos.value.filter(t => t.id !== id)
+const deleteTodo = async (id: number) => {
+  try {
+    await execSQL('DELETE FROM todos WHERE id = ?', [id])
+    todos.value = todos.value.filter(t => t.id !== id)
+  } catch (error) {
+    console.error('删除待办事项失败:', error)
+  }
 }
 
 const startEdit = (todo: TodoItem) => {
@@ -88,12 +138,24 @@ const startEdit = (todo: TodoItem) => {
   })
 }
 
-const finishEdit = (todo: TodoItem) => {
+const finishEdit = async (todo: TodoItem) => {
   if (!todo.content.trim()) {
-    deleteTodo(todo.id)
+    await deleteTodo(todo.id)
   } else {
-    todo.editing = false
-    delete todo.previousContent
+    try {
+      await execSQL(
+        'UPDATE todos SET content = ? WHERE id = ?',
+        [todo.content, todo.id]
+      )
+      todo.editing = false
+      delete todo.previousContent
+    } catch (error) {
+      console.error('更新待办事项内容失败:', error)
+      // 如果更新失败，恢复原来的内容
+      if (todo.previousContent !== undefined) {
+        todo.content = todo.previousContent
+      }
+    }
   }
 }
 
