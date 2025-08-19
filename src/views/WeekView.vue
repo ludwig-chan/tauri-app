@@ -2,15 +2,16 @@
   <div class="month-view">
     <div class="month-card">
       <div class="month-header">
-        <h2>📅 月历视图</h2>
-        <div class="current-date">{{ formatDate(currentDate) }}</div>
-      </div>
-      
-      <div class="month-info">
-        <div class="week-number">
-          <div class="label">本年第</div>
-          <div class="number">{{ weekNumber }}</div>
-          <div class="label">周</div>
+        <div class="header-left">
+          <h2>📅 月历视图</h2>
+          <div class="current-date">{{ formatDate(currentDate) }}</div>
+        </div>
+        <div class="week-info">
+          <div class="week-number">
+            <span class="label">第</span>
+            <span class="number">{{ weekNumber }}</span>
+            <span class="label">周</span>
+          </div>
         </div>
       </div>
 
@@ -36,23 +37,80 @@
               { 
                 'today': day.isToday,
                 'other-month': day.isOtherMonth,
-                'weekend': day.isWeekend
+                'weekend': day.isWeekend,
+                'has-todos': getTodosForDate(day.fullDate).length > 0
               }
             ]"
+            @click="openTodoDialog(day.fullDate)"
           >
             <div class="day-date">{{ day.date }}</div>
+            <div class="day-todos">
+              <div 
+                v-for="todo in getTodosForDate(day.fullDate).slice(0, 2)" 
+                :key="todo.id"
+                :class="['todo-item', { 'completed': todo.completed }]"
+                :title="todo.content"
+              >
+                {{ todo.content.length > 10 ? todo.content.substring(0, 10) + '...' : todo.content }}
+              </div>
+              <div 
+                v-if="getTodosForDate(day.fullDate).length > 2" 
+                class="more-todos"
+                :title="`还有 ${getTodosForDate(day.fullDate).length - 2} 个待办事项`"
+              >
+                +{{ getTodosForDate(day.fullDate).length - 2 }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 待办事项添加弹窗 -->
+    <TodoDialog 
+      v-model:visible="dialogVisible"
+      :selected-date="selectedDate"
+      @todo-added="handleTodoAdded"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import TodoDialog from '../components/ui/TodoDialog.vue'
+import { todoStore } from '../utils/todoStore'
+import type { TodoItem } from '../utils/todoStore'
 
 const currentDate = ref(new Date())
 const displayDate = ref(new Date()) // 用于显示的月份，可以通过按钮切换
+
+// 弹窗相关状态
+const dialogVisible = ref(false)
+const selectedDate = ref<Date | null>(null)
+
+// 使用共享的待办事项状态
+const { initializeTodos, getTodosForDate } = todoStore
+
+// 初始化并加载待办事项
+onMounted(async () => {
+  try {
+    await initializeTodos()
+  } catch (error) {
+    console.error('初始化失败:', error)
+  }
+})
+
+// 打开待办事项添加弹窗
+const openTodoDialog = (date: Date) => {
+  selectedDate.value = date
+  dialogVisible.value = true
+}
+
+// 处理待办事项添加完成
+const handleTodoAdded = (newTodo: TodoItem) => {
+  console.log('新待办事项已添加:', newTodo)
+  // 不需要手动更新列表，因为使用了共享状态管理
+}
 
 // 获取当前年份的第几周
 const getWeekNumber = (date: Date): number => {
@@ -164,9 +222,11 @@ onMounted(() => {
 
 <style scoped>
 .month-view {
-  max-width: 700px;
   margin: 0 auto;
   padding: 20px;
+  height: calc(100vh - 120px); /* 减去导航栏和padding的高度 */
+  display: flex;
+  flex-direction: column;
 }
 
 .month-card {
@@ -175,54 +235,63 @@ onMounted(() => {
   padding: 24px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   border: 1px solid #e0e0e0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .month-header {
-  text-align: center;
-  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e9ecef;
 }
 
-.month-header h2 {
-  margin: 0 0 8px 0;
+.header-left h2 {
+  margin: 0 0 4px 0;
   color: #2c3e50;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
 }
 
 .current-date {
   color: #666;
-  font-size: 16px;
+  font-size: 14px;
+  margin: 0;
 }
 
-.month-info {
+.week-info {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  margin-bottom: 24px;
 }
 
 .week-number {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
-  gap: 8px;
+  gap: 4px;
 }
 
 .week-number .label {
-  font-size: 18px;
+  font-size: 14px;
   color: #666;
 }
 
 .week-number .number {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: bold;
   color: #42b983;
-  text-shadow: 0 2px 4px rgba(66, 185, 131, 0.2);
+  text-shadow: 0 1px 2px rgba(66, 185, 131, 0.2);
 }
 
 .month-calendar {
-  margin-top: 20px;
+  margin-top: 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .calendar-header {
@@ -231,6 +300,7 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 20px;
   padding: 0 8px;
+  flex-shrink: 0;
 }
 
 .nav-button {
@@ -261,6 +331,7 @@ onMounted(() => {
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
   margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .weekday {
@@ -276,21 +347,26 @@ onMounted(() => {
 .calendar-days {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(6, 1fr); /* 固定6行 */
   gap: 4px;
+  flex: 1;
+  overflow: hidden;
 }
 
 .day {
   text-align: center;
-  padding: 12px 8px;
+  padding: 8px 6px;
   background: #ffffff;
   border: 1px solid #e9ecef;
   border-radius: 6px;
   transition: all 0.2s ease;
   cursor: pointer;
-  min-height: 50px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 4px;
+  overflow: hidden;
 }
 
 .day:hover {
@@ -304,7 +380,7 @@ onMounted(() => {
   color: white;
   border-color: #42b983;
   font-weight: bold;
-  transform: scale(1.05);
+  transform: scale(1.02);
   box-shadow: 0 2px 8px rgba(66, 185, 131, 0.3);
 }
 
@@ -328,22 +404,92 @@ onMounted(() => {
   border-color: #e74c3c;
 }
 
+.day.has-todos {
+  border-left: 3px solid #42b983;
+}
+
 .day-date {
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.day-todos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  align-items: center;
+}
+
+.todo-item {
+  font-size: 10px;
+  background: rgba(66, 185, 131, 0.1);
+  color: #2c5530;
+  padding: 2px 4px;
+  border-radius: 3px;
+  width: 100%;
+  text-align: center;
+  border: 1px solid rgba(66, 185, 131, 0.2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.todo-item.completed {
+  background: rgba(136, 136, 136, 0.1);
+  color: #888;
+  text-decoration: line-through;
+  border-color: rgba(136, 136, 136, 0.2);
+}
+
+.day.today .todo-item {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.more-todos {
+  font-size: 9px;
+  color: #666;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.day.today .more-todos {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
 }
 
 @media (max-width: 768px) {
   .month-view {
     padding: 16px;
+    height: calc(100vh - 100px);
   }
   
   .month-card {
     padding: 20px;
   }
   
+  .month-header {
+    margin-bottom: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .header-left h2 {
+    font-size: 18px;
+  }
+  
   .week-number .number {
-    font-size: 28px;
+    font-size: 20px;
+  }
+  
+  .week-number .label {
+    font-size: 12px;
   }
   
   .calendar-days {
@@ -351,12 +497,16 @@ onMounted(() => {
   }
   
   .day {
-    padding: 8px 4px;
-    min-height: 40px;
+    padding: 6px 4px;
   }
   
   .day-date {
     font-size: 14px;
+  }
+  
+  .todo-item {
+    font-size: 9px;
+    padding: 1px 3px;
   }
   
   .weekday {
@@ -366,8 +516,33 @@ onMounted(() => {
 }
 
 @media (max-width: 480px) {
+  .month-view {
+    height: calc(100vh - 80px);
+  }
+  
   .month-card {
     padding: 16px;
+  }
+  
+  .month-header {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+  }
+  
+  .header-left h2 {
+    font-size: 16px;
+  }
+  
+  .current-date {
+    font-size: 12px;
+  }
+  
+  .week-number .number {
+    font-size: 18px;
+  }
+  
+  .week-number .label {
+    font-size: 11px;
   }
   
   .calendar-header {
@@ -384,12 +559,20 @@ onMounted(() => {
   }
   
   .day {
-    min-height: 35px;
-    padding: 6px 2px;
+    padding: 4px 2px;
   }
   
   .day-date {
     font-size: 13px;
+  }
+  
+  .todo-item {
+    font-size: 8px;
+    padding: 1px 2px;
+  }
+  
+  .more-todos {
+    font-size: 8px;
   }
 }
 </style>

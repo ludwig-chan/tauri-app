@@ -4,10 +4,17 @@
     <div class="input-area">
       <input 
         v-model="newTodo"
-        @keyup.enter="addTodo"
+        @keyup.enter="addNewTodo"
         placeholder="添加新的待办事项..."
+        class="todo-input"
       />
-      <button @click="addTodo">添加</button>
+      <input 
+        v-model="newTodoDate"
+        type="date"
+        class="date-input"
+        placeholder="选择日期 (可选)"
+      />
+      <button @click="addNewTodo">添加</button>
     </div>
 
     <ul class="todo-list">
@@ -15,160 +22,178 @@
         <div class="todo-content">
           <Checkbox
             :model-value="todo.completed"
-            @update:modelValue="(value) => updateTodoStatus(todo.id, value)"
+            @update:modelValue="(value) => handleUpdateTodoStatus(todo.id, value)"
           />
-          <span 
-            v-if="!todo.editing" 
-            :class="{ completed: todo.completed }"
-            @dblclick="startEdit(todo)"
-          >
-            {{ todo.content }}
-          </span>
-          <input
-            v-else
-            v-model="todo.content"
-            @blur="finishEdit(todo)"
-            @keyup.enter="finishEdit(todo)"
-            @keyup.esc="cancelEdit(todo)"
-            ref="editInput"
-            class="edit-input"
-          />
+          <div class="todo-text-container">
+            <span 
+              v-if="!getEditingState(todo.id).editing" 
+              :class="{ completed: todo.completed }"
+              @dblclick="startEdit(todo)"
+            >
+              {{ todo.content }}
+            </span>
+            <input
+              v-else
+              v-model="todo.content"
+              @blur="finishEdit(todo)"
+              @keyup.enter="finishEdit(todo)"
+              @keyup.esc="cancelEdit(todo)"
+              ref="editInput"
+              class="edit-input"
+            />
+            <div v-if="todo.due_date" class="todo-date">
+              📅 {{ formatDate(todo.due_date) }}
+            </div>
+          </div>
         </div>
-        <button @click="deleteTodo(todo.id)" class="delete-btn">删除</button>
+        <div class="todo-actions">
+          <input 
+            v-if="!getEditingState(todo.id).editing"
+            v-model="todo.due_date"
+            type="date"
+            @change="handleUpdateTodoDate(todo.id, todo.due_date || null)"
+            class="date-input-small"
+            :title="todo.due_date ? '修改日期' : '添加日期'"
+          />
+          <button @click="handleDeleteTodo(todo.id)" class="delete-btn">删除</button>
+        </div>
       </li>
     </ul>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import Checkbox from '../components/ui/Checkbox.vue'
-import { execSQL, selectSQL } from '../utils/db'
-import { initializeTodoTable } from '../utils/initDb'
-
-interface TodoItem {
-  id: number
-  content: string
-  completed: boolean
-  editing?: boolean
-  previousContent?: string
-}
+import { todoStore } from '../utils/todoStore'
 
 const newTodo = ref('')
-const todos = ref<TodoItem[]>([])
+const newTodoDate = ref('')
 const editInput = ref<HTMLInputElement | null>(null)
+
+// 编辑状态管理
+const editingStates = ref(new Map<number, { editing: boolean; previousContent?: string }>())
+
+// 使用共享的待办事项状态
+const { 
+  todos, 
+  initializeTodos, 
+  addTodo,
+  updateTodoStatus, 
+  updateTodoContent, 
+  updateTodoDate, 
+  deleteTodo 
+} = todoStore
 
 // 初始化数据库和加载待办事项
 onMounted(async () => {
   try {
-    await initializeTodoTable()
-    await loadTodos()
+    await initializeTodos()
   } catch (error) {
     console.error('初始化失败:', error)
   }
 })
 
-// 从数据库加载所有待办事项
-const loadTodos = async () => {
-  try {
-    const result = await selectSQL<TodoItem>('SELECT id, content, completed FROM todos ORDER BY id DESC')
-    console.log('加载待办事项成功:', result)
-    todos.value = result.map(todo => ({
-      ...todo,
-      completed: Boolean(todo.completed),
-      editing: false
-    }))
-  } catch (error) {
-    console.error('加载待办事项失败:', error)
-  }
+// 获取编辑状态
+const getEditingState = (id: number) => {
+  return editingStates.value.get(id) || { editing: false }
 }
 
-const addTodo = async () => {
+// 格式化日期显示
+const formatDate = (dateStr: string | null) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('zh-CN', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short'
+  })
+}
+
+const addNewTodo = async () => {
   if (!newTodo.value.trim()) return
   
   try {
-    const result = await execSQL(
-      'INSERT INTO todos (content, completed) VALUES (?, ?) RETURNING id',
-      [newTodo.value, false]
-    )
-    
-    const id = result.lastInsertId
-    todos.value.unshift({
-      id,
-      content: newTodo.value,
-      completed: false,
-      editing: false
-    })
+    await addTodo(newTodo.value, newTodoDate.value || null)
     newTodo.value = ''
+    newTodoDate.value = ''
   } catch (error) {
     console.error('添加待办事项失败:', error)
   }
 }
 
-
-const updateTodoStatus = async (id: number, value: boolean) => {
-  const todo = todos.value.find(t => t.id === id)
-  if (todo) {
-    try {
-      await execSQL(
-        'UPDATE todos SET completed = ? WHERE id = ?',
-        [value, id]
-      )
-      todo.completed = value
-    } catch (error) {
-      console.error('更新待办事项状态失败:', error)
-      // 如果更新失败，恢复原来的状态
-      todo.completed = !value
-    }
+const handleUpdateTodoStatus = async (id: number, value: boolean) => {
+  try {
+    await updateTodoStatus(id, value)
+  } catch (error) {
+    console.error('更新待办事项状态失败:', error)
   }
 }
 
-const deleteTodo = async (id: number) => {
+// 更新待办事项日期
+const handleUpdateTodoDate = async (id: number, date: string | null) => {
   try {
-    await execSQL('DELETE FROM todos WHERE id = ?', [id])
-    todos.value = todos.value.filter(t => t.id !== id)
+    await updateTodoDate(id, date)
+  } catch (error) {
+    console.error('更新待办事项日期失败:', error)
+  }
+}
+
+const handleDeleteTodo = async (id: number) => {
+  try {
+    await deleteTodo(id)
+    // 清理编辑状态
+    editingStates.value.delete(id)
   } catch (error) {
     console.error('删除待办事项失败:', error)
   }
 }
 
-const startEdit = (todo: TodoItem) => {
-  todo.previousContent = todo.content
-  todo.editing = true
-  setTimeout(() => {
-    if (editInput.value) {
-      editInput.value.focus()
-    }
-  })
+const startEdit = (todo: { id: number; content: string }) => {
+  const todo_item = todos.value.find(t => t.id === todo.id)
+  if (todo_item) {
+    editingStates.value.set(todo.id, {
+      editing: true,
+      previousContent: todo_item.content
+    })
+    nextTick(() => {
+      if (editInput.value) {
+        editInput.value.focus()
+      }
+    })
+  }
 }
 
-const finishEdit = async (todo: TodoItem) => {
+const finishEdit = async (todo: { id: number; content: string }) => {
   if (!todo.content.trim()) {
-    await deleteTodo(todo.id)
+    await handleDeleteTodo(todo.id)
   } else {
     try {
-      await execSQL(
-        'UPDATE todos SET content = ? WHERE id = ?',
-        [todo.content, todo.id]
-      )
-      todo.editing = false
-      delete todo.previousContent
+      await updateTodoContent(todo.id, todo.content)
+      editingStates.value.delete(todo.id)
     } catch (error) {
       console.error('更新待办事项内容失败:', error)
       // 如果更新失败，恢复原来的内容
-      if (todo.previousContent !== undefined) {
-        todo.content = todo.previousContent
+      const state = getEditingState(todo.id)
+      if (state.previousContent !== undefined) {
+        const todo_item = todos.value.find(t => t.id === todo.id)
+        if (todo_item) {
+          todo_item.content = state.previousContent
+        }
       }
     }
   }
 }
 
-const cancelEdit = (todo: TodoItem) => {
-  if (todo.previousContent !== undefined) {
-    todo.content = todo.previousContent
+const cancelEdit = (todo: { id: number; content: string }) => {
+  const state = getEditingState(todo.id)
+  if (state.previousContent !== undefined) {
+    const todo_item = todos.value.find(t => t.id === todo.id)
+    if (todo_item) {
+      todo_item.content = state.previousContent
+    }
   }
-  todo.editing = false
-  delete todo.previousContent
+  editingStates.value.delete(todo.id)
 }
 </script>
 
@@ -188,6 +213,27 @@ const cancelEdit = (todo: TodoItem) => {
   display: flex;
   gap: 10px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.todo-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+}
+
+.date-input {
+  min-width: 150px;
+  padding: 8px 12px;
+}
+
+.date-input-small {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-right: 8px;
+  min-width: 120px;
 }
 
 input {
@@ -218,18 +264,41 @@ button:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px;
+  padding: 12px;
   margin-bottom: 8px;
   background-color: #f9f9f9;
-  border-radius: 4px;
+  border-radius: 8px;
+  border-left: 4px solid #e0e0e0;
 }
 
 .todo-content {
   display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-grow: 1;
+}
+
+.todo-text-container {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.todo-date {
+  font-size: 12px;
+  color: #666;
+  background: #e3f2fd;
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
+  width: fit-content;
+}
+
+.todo-actions {
+  display: flex;
   align-items: center;
   gap: 8px;
-  flex-grow: 1;
-  margin-right: 10px;
 }
 
 .completed {
@@ -257,5 +326,31 @@ button:hover {
 span {
   cursor: pointer;
   padding: 4px 0;
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .input-area {
+    flex-direction: column;
+  }
+  
+  .todo-input,
+  .date-input {
+    min-width: 100%;
+  }
+  
+  .todo-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .todo-actions {
+    justify-content: flex-end;
+  }
+  
+  .date-input-small {
+    min-width: 100px;
+  }
 }
 </style>
