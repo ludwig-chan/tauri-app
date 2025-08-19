@@ -10,7 +10,9 @@ export async function initializeTodoTable() {
             content TEXT NOT NULL,
             completed BOOLEAN NOT NULL DEFAULT 0,
             due_date DATE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            parent_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (parent_id) REFERENCES todos (id) ON DELETE CASCADE
         )
     `
     
@@ -18,17 +20,32 @@ export async function initializeTodoTable() {
         await execSQL(createTableSQL)
         
         // 检查是否需要添加 due_date 列（用于现有数据库的升级）
-        const addColumnSQL = `
+        const addDueDateColumnSQL = `
             ALTER TABLE todos ADD COLUMN due_date DATE
         `
         
         try {
-            await execSQL(addColumnSQL)
+            await execSQL(addDueDateColumnSQL)
             console.log('成功添加due_date列')
         } catch (error: any) {
             // 忽略列已存在的错误
             if (!error.toString().includes('duplicate column name')) {
                 console.error('添加due_date列失败:', error)
+            }
+        }
+
+        // 检查是否需要添加 parent_id 列（用于现有数据库的升级）
+        const addParentIdColumnSQL = `
+            ALTER TABLE todos ADD COLUMN parent_id INTEGER
+        `
+        
+        try {
+            await execSQL(addParentIdColumnSQL)
+            console.log('成功添加parent_id列')
+        } catch (error: any) {
+            // 忽略列已存在的错误
+            if (!error.toString().includes('duplicate column name')) {
+                console.error('添加parent_id列失败:', error)
             }
         }
         

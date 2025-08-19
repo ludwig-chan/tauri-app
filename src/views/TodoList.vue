@@ -17,59 +17,41 @@
       <button @click="addNewTodo">添加</button>
     </div>
 
-    <ul class="todo-list">
-      <li v-for="todo in todos" :key="todo.id" class="todo-item">
-        <div class="todo-content">
-          <Checkbox
-            :model-value="todo.completed"
-            @update:modelValue="(value) => handleUpdateTodoStatus(todo.id, value)"
-          />
-          <div class="todo-text-container">
-            <span 
-              v-if="!getEditingState(todo.id).editing" 
-              :class="{ completed: todo.completed }"
-              @dblclick="startEdit(todo)"
-            >
-              {{ todo.content }}
-            </span>
-            <input
-              v-else
-              v-model="todo.content"
-              @blur="finishEdit(todo)"
-              @keyup.enter="finishEdit(todo)"
-              @keyup.esc="cancelEdit(todo)"
-              ref="editInput"
-              class="edit-input"
-            />
-            <div v-if="todo.due_date" class="todo-date">
-              📅 {{ formatDate(todo.due_date) }}
-            </div>
-          </div>
-        </div>
-        <div class="todo-actions">
-          <input 
-            v-if="!getEditingState(todo.id).editing"
-            v-model="todo.due_date"
-            type="date"
-            @change="handleUpdateTodoDate(todo.id, todo.due_date || null)"
-            class="date-input-small"
-            :title="todo.due_date ? '修改日期' : '添加日期'"
-          />
-          <button @click="handleDeleteTodo(todo.id)" class="delete-btn">删除</button>
-        </div>
-      </li>
-    </ul>
+    <div class="todo-list">
+      <TodoItem
+        v-for="todo in todos"
+        :key="todo.id"
+        :todo="todo"
+        :level="0"
+        :editing-states="editingStates"
+        @updateStatus="handleUpdateTodoStatus"
+        @updateContent="handleUpdateTodoContent"
+        @updateDate="handleUpdateTodoDate"
+        @addSubtodo="openSubtodoDialog"
+        @deleteTodo="handleDeleteTodo"
+      />
+    </div>
+
+    <!-- 子待办添加对话框 -->
+    <SubtodoDialog
+      :visible="subtodoDialogVisible"
+      :parent-id="selectedParentId"
+      @close="closeSubtodoDialog"
+      @add="handleAddSubtodo"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
-import Checkbox from '../components/ui/Checkbox.vue'
+import { ref, onMounted } from 'vue'
+import TodoItem from '../components/ui/TodoItem.vue'
+import SubtodoDialog from '../components/ui/SubtodoDialog.vue'
 import { todoStore } from '../utils/todoStore'
 
 const newTodo = ref('')
 const newTodoDate = ref('')
-const editInput = ref<HTMLInputElement | null>(null)
+const subtodoDialogVisible = ref(false)
+const selectedParentId = ref<number | null>(null)
 
 // 编辑状态管理
 const editingStates = ref(new Map<number, { editing: boolean; previousContent?: string }>())
@@ -94,22 +76,6 @@ onMounted(async () => {
   }
 })
 
-// 获取编辑状态
-const getEditingState = (id: number) => {
-  return editingStates.value.get(id) || { editing: false }
-}
-
-// 格式化日期显示
-const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('zh-CN', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short'
-  })
-}
-
 const addNewTodo = async () => {
   if (!newTodo.value.trim()) return
   
@@ -130,7 +96,14 @@ const handleUpdateTodoStatus = async (id: number, value: boolean) => {
   }
 }
 
-// 更新待办事项日期
+const handleUpdateTodoContent = async (id: number, content: string) => {
+  try {
+    await updateTodoContent(id, content)
+  } catch (error) {
+    console.error('更新待办事项内容失败:', error)
+  }
+}
+
 const handleUpdateTodoDate = async (id: number, date: string | null) => {
   try {
     await updateTodoDate(id, date)
@@ -149,51 +122,22 @@ const handleDeleteTodo = async (id: number) => {
   }
 }
 
-const startEdit = (todo: { id: number; content: string }) => {
-  const todo_item = todos.value.find(t => t.id === todo.id)
-  if (todo_item) {
-    editingStates.value.set(todo.id, {
-      editing: true,
-      previousContent: todo_item.content
-    })
-    nextTick(() => {
-      if (editInput.value) {
-        editInput.value.focus()
-      }
-    })
-  }
+const openSubtodoDialog = (parentId: number) => {
+  selectedParentId.value = parentId
+  subtodoDialogVisible.value = true
 }
 
-const finishEdit = async (todo: { id: number; content: string }) => {
-  if (!todo.content.trim()) {
-    await handleDeleteTodo(todo.id)
-  } else {
-    try {
-      await updateTodoContent(todo.id, todo.content)
-      editingStates.value.delete(todo.id)
-    } catch (error) {
-      console.error('更新待办事项内容失败:', error)
-      // 如果更新失败，恢复原来的内容
-      const state = getEditingState(todo.id)
-      if (state.previousContent !== undefined) {
-        const todo_item = todos.value.find(t => t.id === todo.id)
-        if (todo_item) {
-          todo_item.content = state.previousContent
-        }
-      }
-    }
-  }
+const closeSubtodoDialog = () => {
+  subtodoDialogVisible.value = false
+  selectedParentId.value = null
 }
 
-const cancelEdit = (todo: { id: number; content: string }) => {
-  const state = getEditingState(todo.id)
-  if (state.previousContent !== undefined) {
-    const todo_item = todos.value.find(t => t.id === todo.id)
-    if (todo_item) {
-      todo_item.content = state.previousContent
-    }
+const handleAddSubtodo = async (content: string, dueDate: string | null, parentId: number) => {
+  try {
+    await addTodo(content, dueDate, parentId)
+  } catch (error) {
+    console.error('添加子待办事项失败:', error)
   }
-  editingStates.value.delete(todo.id)
 }
 </script>
 
@@ -227,15 +171,6 @@ const cancelEdit = (todo: { id: number; content: string }) => {
   padding: 8px 12px;
 }
 
-.date-input-small {
-  padding: 4px 8px;
-  font-size: 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  margin-right: 8px;
-  min-width: 120px;
-}
-
 input {
   border: 1px solid #ddd;
   border-radius: 4px;
@@ -256,77 +191,9 @@ button:hover {
 }
 
 .todo-list {
-  list-style: none;
-  padding: 0;
-}
-
-.todo-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px;
-  margin-bottom: 8px;
-  background-color: #f9f9f9;
-  border-radius: 8px;
-  border-left: 4px solid #e0e0e0;
-}
-
-.todo-content {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  flex-grow: 1;
-}
-
-.todo-text-container {
-  flex-grow: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.todo-date {
-  font-size: 12px;
-  color: #666;
-  background: #e3f2fd;
-  padding: 2px 8px;
-  border-radius: 12px;
-  display: inline-block;
-  width: fit-content;
-}
-
-.todo-actions {
-  display: flex;
-  align-items: center;
   gap: 8px;
-}
-
-.completed {
-  text-decoration: line-through;
-  color: #888;
-}
-
-.delete-btn {
-  background-color: #ff4444;
-  padding: 4px 8px;
-  font-size: 14px;
-}
-
-.delete-btn:hover {
-  background-color: #cc0000;
-}
-
-.edit-input {
-  margin: 0;
-  padding: 4px 8px;
-  font-size: 16px;
-  flex-grow: 1;
-}
-
-span {
-  cursor: pointer;
-  padding: 4px 0;
-  line-height: 1.4;
 }
 
 @media (max-width: 768px) {
@@ -337,20 +204,6 @@ span {
   .todo-input,
   .date-input {
     min-width: 100%;
-  }
-  
-  .todo-item {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  
-  .todo-actions {
-    justify-content: flex-end;
-  }
-  
-  .date-input-small {
-    min-width: 100px;
   }
 }
 </style>

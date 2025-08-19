@@ -28,7 +28,7 @@
           </div>
         </div>
         
-        <div class="calendar-days">
+        <div class="calendar-days" :style="{ gridTemplateRows: `repeat(${calendarRows}, 1fr)` }">
           <div 
             v-for="day in monthDays" 
             :key="day.key"
@@ -204,6 +204,12 @@ const currentMonthYear = computed(() => {
 const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 const monthDays = computed(() => getMonthDays(displayDate.value))
 
+// 计算当前月份需要的行数
+const calendarRows = computed(() => {
+  const days = monthDays.value
+  return Math.ceil(days.length / 7)
+})
+
 // 组件挂载时更新当前时间
 onMounted(() => {
   const updateTime = () => {
@@ -223,7 +229,6 @@ onMounted(() => {
 <style scoped>
 .month-view {
   margin: 0 auto;
-  padding: 20px;
   height: calc(100vh - 120px); /* 减去导航栏和padding的高度 */
   display: flex;
   flex-direction: column;
@@ -347,7 +352,6 @@ onMounted(() => {
 .calendar-days {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: repeat(6, 1fr); /* 固定6行 */
   gap: 4px;
   flex: 1;
   overflow: hidden;
