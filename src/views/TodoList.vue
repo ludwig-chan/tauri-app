@@ -14,8 +14,8 @@
       <li v-for="todo in todos" :key="todo.id" class="todo-item">
         <div class="todo-content">
           <Checkbox
-            v-model="todo.completed"
-            @update:modelValue="toggleTodo(todo.id)"
+            :model-value="todo.completed"
+            @update:modelValue="(value) => updateTodoStatus(todo.id, value)"
           />
           <span 
             v-if="!todo.editing" 
@@ -72,6 +72,7 @@ onMounted(async () => {
 const loadTodos = async () => {
   try {
     const result = await selectSQL<TodoItem>('SELECT id, content, completed FROM todos ORDER BY id DESC')
+    console.log('加载待办事项成功:', result)
     todos.value = result.map(todo => ({
       ...todo,
       completed: Boolean(todo.completed),
@@ -104,17 +105,20 @@ const addTodo = async () => {
   }
 }
 
-const toggleTodo = async (id: number) => {
+
+const updateTodoStatus = async (id: number, value: boolean) => {
   const todo = todos.value.find(t => t.id === id)
   if (todo) {
     try {
       await execSQL(
         'UPDATE todos SET completed = ? WHERE id = ?',
-        [!todo.completed, id]
+        [value, id]
       )
-      todo.completed = !todo.completed
+      todo.completed = value
     } catch (error) {
       console.error('更新待办事项状态失败:', error)
+      // 如果更新失败，恢复原来的状态
+      todo.completed = !value
     }
   }
 }
@@ -187,8 +191,6 @@ const cancelEdit = (todo: TodoItem) => {
 }
 
 input {
-  flex-grow: 1;
-  padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 16px;
