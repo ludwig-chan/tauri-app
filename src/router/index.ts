@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import TodoList from '../views/TodoList.vue'
 import Pomodoro from '../views/Pomodoro.vue'
 import WeekView from '../views/WeekView.vue'
+import ScreenshotView from '../views/ScreenshotView.vue'
 
 const routes = [
   {
@@ -22,6 +23,11 @@ const routes = [
     path: '/week',
     name: 'WeekView',
     component: WeekView
+  },
+  {
+    path: '/screenshot',
+    name: 'ScreenshotView',
+    component: ScreenshotView
   }
 ]
 
