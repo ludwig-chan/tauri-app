@@ -45,7 +45,7 @@ async fn capture_full_screen() -> Result<ScreenshotResult, String> {
     // 转换screenshots::Image到image::DynamicImage
     let width = screenshot.width();
     let height = screenshot.height();
-    let buffer = screenshot.buffer();
+    let buffer = screenshot.rgba();
     
     // 创建ImageBuffer (RGBA格式)
     let image_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(
