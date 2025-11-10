@@ -3,21 +3,12 @@ import TodoList from '../views/TodoList.vue'
 import Pomodoro from '../views/Pomodoro.vue'
 import WeekView from '../views/WeekView.vue'
 import ScreenshotView from '../views/ScreenshotView.vue'
+import ClipboardView from '../views/ClipboardView.vue'
 
 const routes = [
   {
     path: '/',
-    redirect: '/todos'
-  },
-  {
-    path: '/todos',
-    name: 'TodoList',
-    component: TodoList
-  },
-  {
-    path: '/pomodoro',
-    name: 'Pomodoro',
-    component: Pomodoro
+    redirect: '/week'
   },
   {
     path: '/week',
@@ -28,6 +19,21 @@ const routes = [
     path: '/screenshot',
     name: 'ScreenshotView',
     component: ScreenshotView
+  },
+  {
+    path: '/clipboard',
+    name: 'ClipboardView',
+    component: ClipboardView
+  },
+  {
+    path: '/pomodoro',
+    name: 'Pomodoro',
+    component: Pomodoro
+  },
+  {
+    path: '/todos',
+    name: 'TodoList',
+    component: TodoList
   }
 ]
 

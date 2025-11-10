@@ -2,10 +2,11 @@
 <template>
   <div class="container">
     <div class="tabs">
-      <router-link to="/todos" class="tab" active-class="active">待办清单</router-link>
-      <router-link to="/pomodoro" class="tab" active-class="active">番茄时钟</router-link>
       <router-link to="/week" class="tab" active-class="active">月历</router-link>
       <router-link to="/screenshot" class="tab" active-class="active">截图贴图</router-link>
+      <router-link to="/clipboard" class="tab" active-class="active">剪贴板</router-link>
+      <router-link to="/pomodoro" class="tab" active-class="active">番茄时钟</router-link>
+      <router-link to="/todos" class="tab" active-class="active">待办清单</router-link>
     </div>
     <router-view />
   </div>
