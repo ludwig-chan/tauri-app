@@ -3,10 +3,17 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": [
-    "main"
+    "main",
+    "screenshot_*"
   ],
   "permissions": [
     "core:default",
+    "core:window:allow-close",
+    "core:window:allow-create",
+    "core:window:allow-center",
+    "core:window:allow-set-size",
+    "core:window:allow-start-dragging",
+    "core:window:allow-inner-size",
     "opener:default",
     "sql:default",
     "sql:allow-execute",
