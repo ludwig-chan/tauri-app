@@ -23,45 +23,49 @@
         </div>
         
         <div class="calendar-weekdays">
+          <div class="week-label-header">周数</div>
           <div v-for="weekday in weekdays" :key="weekday" class="weekday">
             {{ weekday }}
           </div>
         </div>
         
-        <div class="calendar-days" :style="{ gridTemplateRows: `repeat(${calendarRows}, 1fr)` }">
-          <div 
-            v-for="day in monthDays" 
-            :key="day.key"
-            :class="[
-              'day', 
-              { 
-                'today': day.isToday,
-                'other-month': day.isOtherMonth,
-                'weekend': day.isWeekend,
-                'has-todos': getTodosForDate(day.fullDate).length > 0
-              }
-            ]"
-            @click="openTodoDialog(day.fullDate)"
-          >
-            <div class="day-date">{{ day.date }}</div>
-            <div class="day-todos">
-              <div 
-                v-for="todo in getTodosForDate(day.fullDate).slice(0, 2)" 
-                :key="todo.id"
-                :class="['todo-item', { 'completed': todo.completed }]"
-                :title="todo.content"
-              >
-                {{ todo.content.length > 10 ? todo.content.substring(0, 10) + '...' : todo.content }}
-              </div>
-              <div 
-                v-if="getTodosForDate(day.fullDate).length > 2" 
-                class="more-todos"
-                :title="`还有 ${getTodosForDate(day.fullDate).length - 2} 个待办事项`"
-              >
-                +{{ getTodosForDate(day.fullDate).length - 2 }}
+        <div class="calendar-grid">
+          <template v-for="(week, weekIndex) in weekRows" :key="weekIndex">
+            <div class="week-label">第{{ week.weekNumber }}周</div>
+            <div 
+              v-for="day in week.days" 
+              :key="day.key"
+              :class="[
+                'day', 
+                { 
+                  'today': day.isToday,
+                  'other-month': day.isOtherMonth,
+                  'weekend': day.isWeekend,
+                  'has-todos': getTodosForDate(day.fullDate).length > 0
+                }
+              ]"
+              @click="openTodoDialog(day.fullDate)"
+            >
+              <div class="day-date">{{ day.date }}</div>
+              <div class="day-todos">
+                <div 
+                  v-for="todo in getTodosForDate(day.fullDate).slice(0, 2)" 
+                  :key="todo.id"
+                  :class="['todo-item', { 'completed': todo.completed }]"
+                  :title="todo.content"
+                >
+                  {{ todo.content.length > 10 ? todo.content.substring(0, 10) + '...' : todo.content }}
+                </div>
+                <div 
+                  v-if="getTodosForDate(day.fullDate).length > 2" 
+                  class="more-todos"
+                  :title="`还有 ${getTodosForDate(day.fullDate).length - 2} 个待办事项`"
+                >
+                  +{{ getTodosForDate(day.fullDate).length - 2 }}
+                </div>
               </div>
             </div>
-          </div>
+          </template>
         </div>
       </div>
     </div>
@@ -112,17 +116,24 @@ const handleTodoAdded = (newTodo: TodoItem) => {
   // 不需要手动更新列表，因为使用了共享状态管理
 }
 
-// 获取当前年份的第几周
+// 获取当前年份的第几周（ISO 8601标准）
 const getWeekNumber = (date: Date): number => {
-  const target = new Date(date.valueOf())
-  const dayNumber = (date.getUTCDay() + 6) % 7
-  target.setUTCDate(target.getUTCDate() - dayNumber + 3)
-  const firstThursday = target.valueOf()
-  target.setUTCMonth(0, 1)
-  if (target.getUTCDay() !== 4) {
-    target.setUTCMonth(0, 1 + ((4 - target.getUTCDay()) + 7) % 7)
-  }
-  return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000)
+  // 创建日期副本，避免修改原始日期
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  
+  // 获取当前日期是周几（0=周日, 1=周一, ..., 6=周六）
+  const dayNum = target.getDay() || 7 // 将周日的0转换为7
+  
+  // 设置到本周的周四
+  target.setDate(target.getDate() + 4 - dayNum)
+  
+  // 获取当年的1月1日
+  const yearStart = new Date(target.getFullYear(), 0, 1)
+  
+  // 计算周数：从年初到当前周四的天数差 / 7，向上取整
+  const weekNumber = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  
+  return weekNumber
 }
 
 // 格式化日期
@@ -204,10 +215,22 @@ const currentMonthYear = computed(() => {
 const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 const monthDays = computed(() => getMonthDays(displayDate.value))
 
-// 计算当前月份需要的行数
-const calendarRows = computed(() => {
+// 将日期按周分组，并计算每周的周数
+const weekRows = computed(() => {
   const days = monthDays.value
-  return Math.ceil(days.length / 7)
+  const weeks = []
+  
+  for (let i = 0; i < days.length; i += 7) {
+    const weekDays = days.slice(i, i + 7)
+    // 使用这一周的第一天（周一）来计算周数
+    const weekNumber = getWeekNumber(weekDays[0].fullDate)
+    weeks.push({
+      weekNumber,
+      days: weekDays
+    })
+  }
+  
+  return weeks
 })
 
 // 组件挂载时更新当前时间
@@ -333,10 +356,20 @@ onMounted(() => {
 
 .calendar-weekdays {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: 65px repeat(7, 1fr);
   gap: 4px;
   margin-bottom: 8px;
   flex-shrink: 0;
+}
+
+.week-label-header {
+  text-align: center;
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  background: #f8f9fa;
+  border-radius: 6px;
 }
 
 .weekday {
@@ -349,12 +382,26 @@ onMounted(() => {
   border-radius: 6px;
 }
 
-.calendar-days {
+.calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: 65px repeat(7, 1fr);
   gap: 4px;
   flex: 1;
   overflow: hidden;
+  grid-auto-rows: 1fr;
+}
+
+.week-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #42b983;
+  background: #f0f9f5;
+  border-radius: 6px;
+  border: 1px solid #e0f2e9;
+  padding: 4px;
 }
 
 .day {
@@ -496,8 +543,24 @@ onMounted(() => {
     font-size: 12px;
   }
   
-  .calendar-days {
+  .calendar-weekdays {
     gap: 2px;
+    grid-template-columns: 55px repeat(7, 1fr);
+  }
+  
+  .calendar-grid {
+    gap: 2px;
+    grid-template-columns: 55px repeat(7, 1fr);
+  }
+  
+  .week-label-header {
+    padding: 6px;
+    font-size: 12px;
+  }
+  
+  .week-label {
+    font-size: 11px;
+    padding: 2px;
   }
   
   .day {
@@ -551,6 +614,24 @@ onMounted(() => {
   
   .calendar-header {
     margin-bottom: 16px;
+  }
+  
+  .calendar-weekdays {
+    grid-template-columns: 50px repeat(7, 1fr);
+  }
+  
+  .calendar-grid {
+    grid-template-columns: 50px repeat(7, 1fr);
+  }
+  
+  .week-label-header {
+    padding: 6px 2px;
+    font-size: 11px;
+  }
+  
+  .week-label {
+    font-size: 10px;
+    padding: 2px 1px;
   }
   
   .month-year {
