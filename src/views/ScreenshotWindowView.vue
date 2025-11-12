@@ -66,6 +66,9 @@ onMounted(async () => {
   // 监听全局键盘事件
   window.addEventListener('keydown', handleKeyPress)
   
+  // 监听鼠标滚轮事件
+  window.addEventListener('wheel', handleWheel, { passive: false })
+  
   // 监听窗口大小变化
   const currentWindow = getCurrentWindow()
   unlisten = await currentWindow.onResized(async (event) => {
@@ -100,6 +103,7 @@ onMounted(async () => {
 onUnmounted(() => {
   // 清理事件监听器
   window.removeEventListener('keydown', handleKeyPress)
+  window.removeEventListener('wheel', handleWheel)
   
   // 清理窗口监听器
   if (unlisten) {
@@ -116,6 +120,49 @@ const handleKeyPress = (event: KeyboardEvent) => {
   if (event.key === 'Escape') {
     event.preventDefault()
     closeWindow()
+  }
+}
+
+const handleWheel = async (event: WheelEvent) => {
+  event.preventDefault()
+  
+  if (!imageDimensions.value.width || !imageDimensions.value.height) return
+  
+  const currentWindow = getCurrentWindow()
+  const size = await currentWindow.innerSize()
+  
+  // 计算缩放比例，向上滚动放大，向下滚动缩小
+  const scaleFactor = event.deltaY < 0 ? 1.1 : 0.9
+  
+  // 保持图片宽高比
+  const imageRatio = imageDimensions.value.width / imageDimensions.value.height
+  
+  const newWidth = Math.round(size.width * scaleFactor)
+  const newHeight = Math.round(newWidth / imageRatio)
+  
+  // 设置最小尺寸限制
+  const minWidth = 200
+  const minHeight = 150
+  
+  if (newWidth < minWidth || newHeight < minHeight) {
+    return
+  }
+  
+  // 设置最大尺寸限制（屏幕尺寸的90%）
+  const maxWidth = window.screen.width * 0.9
+  const maxHeight = window.screen.height * 0.9
+  
+  if (newWidth > maxWidth || newHeight > maxHeight) {
+    return
+  }
+  
+  try {
+    const newSize = new LogicalSize(newWidth, newHeight)
+    targetSize.value = { width: newWidth, height: newHeight }
+    await currentWindow.setSize(newSize)
+    lastSize.value = { width: newWidth, height: newHeight }
+  } catch (error) {
+    console.error('Failed to resize window:', error)
   }
 }
 
