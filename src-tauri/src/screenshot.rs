@@ -204,3 +204,14 @@ pub async fn get_screenshot_data(
         .cloned()
         .ok_or_else(|| "Screenshot data not found".to_string())
 }
+
+// 触发截图（用于全局快捷键）
+pub async fn trigger_screenshot(app: AppHandle) -> Result<(), String> {
+    // 执行截图
+    let result = capture_full_screen().await?;
+    
+    // 打开窗口显示截图
+    open_screenshot_window(app, result.data, result.width, result.height).await?;
+    
+    Ok(())
+}

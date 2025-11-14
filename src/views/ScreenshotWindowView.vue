@@ -1,8 +1,10 @@
 <template>
-  <div ref="containerRef" class="screenshot-window" tabindex="0">
-    <button class="close-button" @click="closeWindow" title="关闭 (ESC)">
-      ×
-    </button>
+  <div 
+    ref="containerRef" 
+    class="screenshot-window" 
+    tabindex="0"
+    @contextmenu="handleContextMenu"
+  >
     <img 
       v-if="imageDataUrl" 
       :src="imageDataUrl" 
@@ -13,6 +15,28 @@
     />
     <div v-else class="loading">
       <div class="spinner"></div>
+    </div>
+    
+    <!-- 透明度显示 -->
+    <div v-if="showOpacityIndicator" class="opacity-indicator">
+      <div class="opacity-label">透明度</div>
+      <div class="opacity-value">{{ Math.round(currentOpacity * 100) }}%</div>
+      <div class="opacity-bar">
+        <div class="opacity-bar-fill" :style="{ width: (currentOpacity * 100) + '%' }"></div>
+      </div>
+    </div>
+    
+    <!-- 右键菜单 -->
+    <div 
+      v-if="showContextMenu" 
+      class="context-menu"
+      :style="{ left: contextMenuPos.x + 'px', top: contextMenuPos.y + 'px' }"
+    >
+      <div class="context-menu-item" @click="closeWindow">
+        <span class="menu-icon">×</span>
+        <span>关闭窗口</span>
+        <span class="menu-shortcut">ESC</span>
+      </div>
     </div>
   </div>
 </template>
@@ -28,7 +52,12 @@ const containerRef = ref<HTMLElement | null>(null)
 const isAdjusting = ref(false)
 const lastSize = ref({ width: 0, height: 0 })
 const targetSize = ref({ width: 0, height: 0 })
+const currentOpacity = ref(1.0)
+const showOpacityIndicator = ref(false)
+const showContextMenu = ref(false)
+const contextMenuPos = ref({ x: 0, y: 0 })
 let resizeTimeout: number | null = null
+let opacityTimeout: number | null = null
 let unlisten: (() => void) | null = null
 
 onMounted(async () => {
@@ -69,6 +98,9 @@ onMounted(async () => {
   // 监听鼠标滚轮事件
   window.addEventListener('wheel', handleWheel, { passive: false })
   
+  // 监听点击事件以关闭右键菜单
+  window.addEventListener('click', handleClickOutside)
+  
   // 监听窗口大小变化
   const currentWindow = getCurrentWindow()
   unlisten = await currentWindow.onResized(async (event) => {
@@ -104,6 +136,7 @@ onUnmounted(() => {
   // 清理事件监听器
   window.removeEventListener('keydown', handleKeyPress)
   window.removeEventListener('wheel', handleWheel)
+  window.removeEventListener('click', handleClickOutside)
   
   // 清理窗口监听器
   if (unlisten) {
@@ -126,9 +159,47 @@ const handleKeyPress = (event: KeyboardEvent) => {
 const handleWheel = async (event: WheelEvent) => {
   event.preventDefault()
   
+  const currentWindow = getCurrentWindow()
+  
+  // 如果按住了 Ctrl 键，调整透明度
+  if (event.ctrlKey) {
+    // 向上滚动增加透明度，向下滚动减少透明度
+    const delta = event.deltaY < 0 ? 0.05 : -0.05
+    let newOpacity = currentOpacity.value + delta
+    
+    // 限制透明度范围在 0.1 到 1.0 之间
+    newOpacity = Math.max(0.1, Math.min(1.0, newOpacity))
+    
+    currentOpacity.value = newOpacity
+    
+    try {
+      await invoke('set_window_opacity', { 
+        label: currentWindow.label,
+        opacity: newOpacity 
+      })
+    } catch (error) {
+      console.error('Failed to set opacity:', error)
+    }
+    
+    // 显示透明度指示器
+    showOpacityIndicator.value = true
+    
+    // 清除之前的定时器
+    if (opacityTimeout !== null) {
+      clearTimeout(opacityTimeout)
+    }
+    
+    // 2秒后隐藏透明度指示器
+    opacityTimeout = window.setTimeout(() => {
+      showOpacityIndicator.value = false
+    }, 2000)
+    
+    return
+  }
+  
+  // 没有按 Ctrl 键，执行原来的缩放功能
   if (!imageDimensions.value.width || !imageDimensions.value.height) return
   
-  const currentWindow = getCurrentWindow()
   const size = await currentWindow.innerSize()
   
   // 计算缩放比例，向上滚动放大，向下滚动缩小
@@ -231,6 +302,16 @@ const closeWindow = async () => {
   const window = getCurrentWindow()
   await window.close()
 }
+
+const handleContextMenu = (event: MouseEvent) => {
+  event.preventDefault()
+  contextMenuPos.value = { x: event.clientX, y: event.clientY }
+  showContextMenu.value = true
+}
+
+const handleClickOutside = () => {
+  showContextMenu.value = false
+}
 </script>
 
 <style scoped>
@@ -244,36 +325,6 @@ const closeWindow = async () => {
   overflow: hidden;
   outline: none;
   position: relative;
-}
-
-.close-button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  font-size: 28px;
-  line-height: 1;
-  cursor: pointer;
-  transition: all 0.2s;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(10px);
-}
-
-.close-button:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: scale(1.1);
-}
-
-.close-button:active {
-  transform: scale(0.95);
 }
 
 .screenshot-image {
@@ -302,5 +353,115 @@ const closeWindow = async () => {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.opacity-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  padding: 20px 30px;
+  border-radius: 12px;
+  color: white;
+  text-align: center;
+  z-index: 100;
+  min-width: 200px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.opacity-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.opacity-value {
+  font-size: 36px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  color: #42b983;
+}
+
+.opacity-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.opacity-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #42b983, #35a372);
+  border-radius: 3px;
+  transition: width 0.15s ease-out;
+}
+
+.context-menu {
+  position: fixed;
+  background: rgba(30, 30, 30, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 180px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  animation: menuFadeIn 0.15s ease-out;
+}
+
+@keyframes menuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.menu-icon {
+  font-size: 20px;
+  font-weight: bold;
+  width: 20px;
+  text-align: center;
+}
+
+.menu-shortcut {
+  margin-left: auto;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
 }
 </style>

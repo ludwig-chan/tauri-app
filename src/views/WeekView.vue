@@ -1,20 +1,6 @@
 <template>
   <div class="month-view">
     <div class="month-card">
-      <div class="month-header">
-        <div class="header-left">
-          <h2>📅 月历视图</h2>
-          <div class="current-date">{{ formatDate(currentDate) }}</div>
-        </div>
-        <div class="week-info">
-          <div class="week-number">
-            <span class="label">第</span>
-            <span class="number">{{ weekNumber }}</span>
-            <span class="label">周</span>
-          </div>
-        </div>
-      </div>
-
       <div class="month-calendar">
         <div class="calendar-header">
           <button @click="previousMonth" class="nav-button">‹</button>
@@ -269,53 +255,7 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.month-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.header-left h2 {
-  margin: 0 0 4px 0;
-  color: #2c3e50;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.current-date {
-  color: #666;
-  font-size: 14px;
-  margin: 0;
-}
-
-.week-info {
-  display: flex;
-  align-items: center;
-}
-
-.week-number {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.week-number .label {
-  font-size: 14px;
-  color: #666;
-}
-
-.week-number .number {
-  font-size: 24px;
-  font-weight: bold;
-  color: #42b983;
-  text-shadow: 0 1px 2px rgba(66, 185, 131, 0.2);
-}
-
 .month-calendar {
-  margin-top: 12px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -524,25 +464,6 @@ onMounted(() => {
     padding: 20px;
   }
   
-  .month-header {
-    margin-bottom: 12px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  .header-left h2 {
-    font-size: 18px;
-  }
-  
-  .week-number .number {
-    font-size: 20px;
-  }
-  
-  .week-number .label {
-    font-size: 12px;
-  }
-  
   .calendar-weekdays {
     gap: 2px;
     grid-template-columns: 55px repeat(7, 1fr);
@@ -589,27 +510,6 @@ onMounted(() => {
   
   .month-card {
     padding: 16px;
-  }
-  
-  .month-header {
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-  }
-  
-  .header-left h2 {
-    font-size: 16px;
-  }
-  
-  .current-date {
-    font-size: 12px;
-  }
-  
-  .week-number .number {
-    font-size: 18px;
-  }
-  
-  .week-number .label {
-    font-size: 11px;
   }
   
   .calendar-header {
