@@ -6,6 +6,8 @@ import WeekView from '../views/WeekView.vue'
 import ScreenshotView from '../views/ScreenshotView.vue'
 import ScreenshotWindowView from '../views/ScreenshotWindowView.vue'
 import ClipboardView from '../views/ClipboardView.vue'
+import SettingsView from '../views/SettingsView.vue'
+import RandomAlarmView from '../views/RandomAlarmView.vue'
 
 const routes = [
   {
@@ -40,6 +42,16 @@ const routes = [
         path: 'todos',
         name: 'TodoList',
         component: TodoList
+      },
+      {
+        path: 'random-alarm',
+        name: 'RandomAlarmView',
+        component: RandomAlarmView
+      },
+      {
+        path: 'settings',
+        name: 'SettingsView',
+        component: SettingsView
       }
     ]
   },
