@@ -100,6 +100,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification'
 import {
   initializeRandomAlarmTables,
   getAllAlarms,
@@ -130,6 +131,7 @@ onMounted(async () => {
   await initializeRandomAlarmTables()
   await loadAlarms()
   await resetDailyCount()
+  await ensureNotificationPermission()
   scheduleAllReminders()
   scheduleResetTimer()
 })
@@ -208,6 +210,12 @@ function triggerReminder(alarm: RandomAlarm) {
   if (alarm.completed_today >= alarm.daily_count) return
   currentReminder.value = alarm
   showReminder.value = true
+
+  // 发送系统通知
+  sendNotification({
+    title: '⏰ 随机提醒',
+    body: `该${alarm.name}啦！`,
+  }).catch((e) => console.error('发送通知失败:', e))
 }
 
 async function completeTask() {
@@ -225,6 +233,11 @@ function snoozeTask() {
     setTimeout(() => {
       if (currentReminder.value) {
         showReminder.value = true
+        // 再次发送系统通知
+        sendNotification({
+          title: '⏰ 稍后提醒',
+          body: `现在是继续${currentReminder.value!.name}的时间`,
+        }).catch((e) => console.error('发送通知失败:', e))
       }
     }, 15 * 60 * 1000)
   }
@@ -253,6 +266,7 @@ function scheduleAllReminders() {
         const delay = targetTime.getTime() - now.getTime()
         const timer = window.setTimeout(() => {
           triggerReminder(alarm)
+          // 定时触发时也推送系统通知（已在 triggerReminder 中处理）
         }, delay)
         timers.push(timer)
       }
@@ -306,6 +320,21 @@ function scheduleResetTimer() {
     scheduleAllReminders()
     scheduleResetTimer()
   }, delay)
+}
+
+async function ensureNotificationPermission() {
+  try {
+    let granted = await isPermissionGranted()
+    if (!granted) {
+      const permission = await requestPermission()
+      granted = permission === 'granted'
+    }
+    if (!granted) {
+      console.warn('通知权限未授予，系统通知将不可用')
+    }
+  } catch (e) {
+    console.error('检查/请求通知权限失败:', e)
+  }
 }
 </script>
 

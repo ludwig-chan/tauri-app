@@ -32,16 +32,8 @@ const isCapturing = ref(false)
 const captureScreen = async () => {
   isCapturing.value = true
   try {
-    const result: any = await invoke('capture_screenshot', { mode: 'fullscreen' })
-    
-    if (result && result.data) {
-      // 直接打开新窗口显示截图
-      await invoke('open_screenshot_window', {
-        imageData: result.data,
-        width: result.width,
-        height: result.height
-      })
-    }
+    // 使用优化的命令：一次调用完成截图和显示，避免数据在前后端传输两次
+    await invoke('capture_and_show')
   } catch (error) {
     console.error('Screenshot failed:', error)
     alert('截图失败: ' + error)

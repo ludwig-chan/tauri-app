@@ -12,9 +12,9 @@
       </svg>
     </button>
     <div class="titlebar-search">
-      <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.5"/>
-        <path d="M8.5 8.5L12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M9.5 9.5L13.5 13.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
       <input 
         type="text" 
@@ -26,6 +26,12 @@
       />
     </div>
     <div class="titlebar-controls">
+      <button class="titlebar-button screenshot" @click="captureScreen" @mousedown.stop :disabled="isCapturing" title="截图">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="M4 7h2l1-2h10l1 2h2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+          <circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="1.2" fill="none"/>
+        </svg>
+      </button>
       <button class="titlebar-button settings" @click="goToSettings" title="设置">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path d="M8 10.5C9.38071 10.5 10.5 9.38071 10.5 8C10.5 6.61929 9.38071 5.5 8 5.5C6.61929 5.5 5.5 6.61929 5.5 8C5.5 9.38071 6.61929 10.5 8 10.5Z" stroke="currentColor" stroke-width="1.2"/>
@@ -59,6 +65,7 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useRouter } from 'vue-router';
 import { ref, onMounted } from 'vue';
+import { invoke } from '@tauri-apps/api/core'
 
 defineProps<{
   isExpanded: boolean;
@@ -72,6 +79,7 @@ const appWindow = getCurrentWindow();
 const router = useRouter();
 const searchQuery = ref('');
 const isMaximized = ref(false);
+const isCapturing = ref(false);
 
 const updateMaximizedState = async () => {
   isMaximized.value = await appWindow.isMaximized();
@@ -108,6 +116,27 @@ const goToSettings = () => {
 const toggleExpand = () => {
   emit('toggleExpand');
 };
+
+const captureScreen = async () => {
+  if (isCapturing.value) return
+  isCapturing.value = true
+  try {
+    const result: any = await invoke('capture_screenshot', { mode: 'fullscreen' })
+    if (result && result.data) {
+      await invoke('open_screenshot_window', {
+        imageData: result.data,
+        width: result.width,
+        height: result.height
+      })
+    }
+  } catch (error) {
+    console.error('Screenshot failed:', error)
+    // keep UI minimal here — mirror ScreenshotView behavior
+    alert('截图失败: ' + error)
+  } finally {
+    isCapturing.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -115,7 +144,7 @@ const toggleExpand = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 32px;
+  height: 48px;
   background: #2c2c2c;
   color: #ffffff;
   user-select: none;
@@ -128,17 +157,18 @@ const toggleExpand = () => {
   display: flex;
   align-items: center;
   flex: 1;
-  max-width: 400px;
-  height: 22px;
+  height: 32px;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 0 8px;
-  gap: 6px;
+  border-radius: 6px;
+  padding: 0 12px;
+  gap: 8px;
 }
 
 .search-icon {
   color: rgba(255, 255, 255, 0.6);
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
 }
 
 .search-input {
@@ -147,7 +177,7 @@ const toggleExpand = () => {
   border: none;
   outline: none;
   color: #ffffff;
-  font-size: 12px;
+  font-size: 14px;
   min-width: 0;
 }
 

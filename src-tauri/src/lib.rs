@@ -1,9 +1,10 @@
 mod screenshot;
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tauri::Manager;
-use tauri_plugin_global_shortcut::GlobalShortcutExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -63,6 +64,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(screenshot::ScreenshotStore {
             data: Mutex::new(HashMap::new()),
@@ -74,12 +76,31 @@ pub fn run() {
             screenshot::save_screenshot,
             screenshot::copy_to_clipboard,
             screenshot::open_screenshot_window,
-            screenshot::get_screenshot_data
+            screenshot::get_screenshot_data,
+            screenshot::capture_and_show
         ])
         .setup(|app| {
             // 注册全局快捷键 F8 用于截图
             let app_handle = app.handle().clone();
-            app.global_shortcut().on_shortcut("F8", move |_app, _shortcut, _event| {
+
+            // 简单防抖：避免按一次键同时触发按下/抬起两次事件导致打开两个窗口
+            // 若在 400ms 内重复触发，则忽略第二次
+            let last_trigger = Arc::new(Mutex::new(Instant::now() - Duration::from_secs(1)));
+            let last_trigger_cloned = last_trigger.clone();
+
+            app.global_shortcut().on_shortcut("F8", move |_app, _shortcut, event| {
+                // 仅在按下时触发，忽略抬起事件
+                if event.state() != ShortcutState::Pressed {
+                    return;
+                }
+                let mut last = last_trigger_cloned.lock().unwrap();
+                let now = Instant::now();
+                if now.duration_since(*last) < Duration::from_millis(400) {
+                    // 忽略过于频繁的触发（如按下与抬起各触发一次，或键盘连发）
+                    return;
+                }
+                *last = now;
+
                 let app_handle = app_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     match screenshot::trigger_screenshot(app_handle).await {

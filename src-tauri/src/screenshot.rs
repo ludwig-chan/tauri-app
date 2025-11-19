@@ -72,23 +72,38 @@ pub async fn capture_screenshot(mode: CaptureMode) -> Result<ScreenshotResult, S
 }
 
 async fn capture_full_screen() -> Result<ScreenshotResult, String> {
+    use std::time::Instant;
+    
+    let total_start = Instant::now();
+    println!("=== 截图性能分析 ===");
+    
+    let start = Instant::now();
     let screens = Screen::all().map_err(|e| format!("Failed to get screens: {}", e))?;
+    println!("1. 获取屏幕列表: {:?}", start.elapsed());
     
     if screens.is_empty() {
         return Err("No screens found".to_string());
     }
     
     // 获取鼠标所在的屏幕
+    let start = Instant::now();
     let screen_index = get_cursor_screen(&screens).unwrap_or(0);
+    println!("2. 获取鼠标位置: {:?}", start.elapsed());
+    
+    let start = Instant::now();
     let screen = &screens[screen_index];
     let screenshot = screen.capture().map_err(|e| format!("Failed to capture screen: {}", e))?;
+    println!("3. 执行屏幕截图: {:?}", start.elapsed());
     
     // 转换screenshots::Image到image::DynamicImage
+    let start = Instant::now();
     let width = screenshot.width();
     let height = screenshot.height();
     let buffer = screenshot.rgba();
+    println!("4. 获取图像数据 ({}x{}): {:?}", width, height, start.elapsed());
     
     // 创建ImageBuffer (RGBA格式)
+    let start = Instant::now();
     let image_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(
         width, 
         height, 
@@ -96,15 +111,28 @@ async fn capture_full_screen() -> Result<ScreenshotResult, String> {
     ).ok_or("Failed to create image buffer")?;
     
     let dynamic_image = DynamicImage::ImageRgba8(image_buffer);
+    println!("5. 创建ImageBuffer: {:?}", start.elapsed());
     
     // 转换为base64
+    let start = Instant::now();
     let mut buffer = Vec::new();
     let mut cursor = Cursor::new(&mut buffer);
     
-    dynamic_image.write_to(&mut cursor, ImageFormat::Png)
-        .map_err(|e| format!("Failed to encode image: {}", e))?;
+    // 使用JPEG格式，质量50（预览足够，速度更快）
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, 50);
+    encoder.encode(
+        dynamic_image.as_bytes(),
+        width,
+        height,
+        dynamic_image.color()
+    ).map_err(|e| format!("Failed to encode image: {}", e))?;
+    println!("6. JPEG编码 质量50 (数据大小: {} KB): {:?}", buffer.len() / 1024, start.elapsed());
     
+    let start = Instant::now();
     let base64_data = general_purpose::STANDARD.encode(&buffer);
+    println!("7. Base64编码 (编码后: {} KB): {:?}", base64_data.len() / 1024, start.elapsed());
+    
+    println!("=== 总耗时: {:?} ===\n", total_start.elapsed());
     
     Ok(ScreenshotResult {
         data: base64_data,
@@ -214,4 +242,27 @@ pub async fn trigger_screenshot(app: AppHandle) -> Result<(), String> {
     open_screenshot_window(app, result.data, result.width, result.height).await?;
     
     Ok(())
+}
+
+// 优化的截图命令：直接截图并显示，避免数据在前后端之间传输两次
+#[command]
+pub async fn capture_and_show(app: AppHandle) -> Result<String, String> {
+    use std::time::Instant;
+    
+    let total_start = Instant::now();
+    println!("\n>>> 开始执行 capture_and_show");
+    
+    // 执行截图
+    let start = Instant::now();
+    let result = capture_full_screen().await?;
+    println!(">>> 截图完成，耗时: {:?}", start.elapsed());
+    
+    // 直接打开窗口显示截图，返回窗口ID
+    let start = Instant::now();
+    let window_id = open_screenshot_window(app, result.data, result.width, result.height).await?;
+    println!(">>> 窗口创建完成，耗时: {:?}", start.elapsed());
+    
+    println!(">>> capture_and_show 总耗时: {:?}\n", total_start.elapsed());
+    
+    Ok(window_id)
 }
