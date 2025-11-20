@@ -77,7 +77,8 @@ pub fn run() {
             screenshot::copy_to_clipboard,
             screenshot::open_screenshot_window,
             screenshot::get_screenshot_data,
-            screenshot::capture_and_show
+            screenshot::capture_and_show,
+            screenshot::save_screenshot_to_file
         ])
         .setup(|app| {
             // 注册全局快捷键 F8 用于截图

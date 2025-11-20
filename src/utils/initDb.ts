@@ -16,8 +16,20 @@ export async function initializeTodoTable() {
         )
     `
     
+    // 创建截图记录表
+    const createScreenshotTableSQL = `
+        CREATE TABLE IF NOT EXISTS screenshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_path TEXT NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `
+    
     try {
         await execSQL(createTableSQL)
+        await execSQL(createScreenshotTableSQL)
         
         // 检查是否需要添加 due_date 列（用于现有数据库的升级）
         const addDueDateColumnSQL = `

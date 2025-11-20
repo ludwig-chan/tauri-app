@@ -26,6 +26,21 @@
       />
     </div>
     <div class="titlebar-controls">
+      <div class="dropdown-wrapper" @mousedown.stop>
+        <button class="titlebar-button dropdown-toggle" @click="toggleDropdown" title="更多">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div v-if="dropdownOpen" class="dropdown-menu">
+          <div class="dropdown-item" @click="navigateTo('/week')">📅 月历</div>
+          <div class="dropdown-item" @click="navigateTo('/clipboard')">📋 剪贴板</div>
+          <div class="dropdown-item" @click="navigateTo('/pomodoro')">🍅 番茄时钟</div>
+          <div class="dropdown-item" @click="navigateTo('/todos')">✅ 待办清单</div>
+          <div class="dropdown-item" @click="navigateTo('/random-alarm')">⏰ 随机闹钟</div>
+          <div class="dropdown-item" @click="navigateTo('/screenshot')">📸 截图</div>
+        </div>
+      </div>
       <button class="titlebar-button screenshot" @click="captureScreen" @mousedown.stop :disabled="isCapturing" title="截图">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
           <path d="M4 7h2l1-2h10l1 2h2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" stroke="currentColor" stroke-width="1.2" fill="none"/>
@@ -62,76 +77,96 @@
 </template>
 
 <script setup lang="ts">
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { useRouter } from 'vue-router';
-import { ref, onMounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { captureAndSave } from '../utils/screenshotService'
 
 defineProps<{
-  isExpanded: boolean;
-}>();
+  isExpanded: boolean
+}>()
 
 const emit = defineEmits<{
-  toggleExpand: [];
-}>();
+  toggleExpand: []
+}>()
 
-const appWindow = getCurrentWindow();
-const router = useRouter();
-const searchQuery = ref('');
-const isMaximized = ref(false);
-const isCapturing = ref(false);
+const appWindow = getCurrentWindow()
+const router = useRouter()
+const searchQuery = ref('')
+const isMaximized = ref(false)
+const isCapturing = ref(false)
+const dropdownOpen = ref(false)
 
 const updateMaximizedState = async () => {
-  isMaximized.value = await appWindow.isMaximized();
-};
+  isMaximized.value = await appWindow.isMaximized()
+}
+
+const toggleDropdown = () => {
+  dropdownOpen.value = !dropdownOpen.value
+}
+
+const closeDropdown = () => {
+  dropdownOpen.value = false
+}
+
+const navigateTo = (path: string) => {
+  router.push(path)
+  closeDropdown()
+}
+
+// 点击外部关闭下拉
+const handleClickOutside = (event: MouseEvent) => {
+  const dropdown = document.querySelector('.dropdown-wrapper')
+  if (dropdown && !dropdown.contains(event.target as Node)) {
+    closeDropdown()
+  }
+}
 
 onMounted(() => {
-  updateMaximizedState();
+  window.addEventListener('mousedown', handleClickOutside)
+  updateMaximizedState()
   appWindow.onResized(() => {
-    updateMaximizedState();
-  });
-});
+    updateMaximizedState()
+  })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('mousedown', handleClickOutside)
+})
 
 const minimizeWindow = async () => {
-  await appWindow.minimize();
-};
+  await appWindow.minimize()
+}
 
 const toggleMaximize = async () => {
   if (isMaximized.value) {
-    await appWindow.unmaximize();
+    await appWindow.unmaximize()
   } else {
-    await appWindow.maximize();
+    await appWindow.maximize()
   }
-  await updateMaximizedState();
-};
+  await updateMaximizedState()
+}
 
 const closeWindow = async () => {
-  await appWindow.close();
-};
+  await appWindow.close()
+}
 
 const goToSettings = () => {
-  router.push('/settings');
-};
+  router.push('/settings')
+}
 
 const toggleExpand = () => {
-  emit('toggleExpand');
-};
+  emit('toggleExpand')
+}
 
 const captureScreen = async () => {
   if (isCapturing.value) return
   isCapturing.value = true
   try {
-    const result: any = await invoke('capture_screenshot', { mode: 'fullscreen' })
-    if (result && result.data) {
-      await invoke('open_screenshot_window', {
-        imageData: result.data,
-        width: result.width,
-        height: result.height
-      })
-    }
+    // 使用统一的截图服务
+    await captureAndSave()
   } catch (error) {
     console.error('Screenshot failed:', error)
-    // keep UI minimal here — mirror ScreenshotView behavior
     alert('截图失败: ' + error)
   } finally {
     isCapturing.value = false
@@ -140,6 +175,43 @@ const captureScreen = async () => {
 </script>
 
 <style scoped>
+.dropdown-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.dropdown-toggle {
+  width: 32px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 140px;
+  background: #fff;
+  color: #333;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 100;
+  margin-top: 8px;
+  padding: 8px 0;
+}
+.dropdown-item {
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.18s;
+}
+.dropdown-item:hover {
+  background: #f5f5f5;
+}
 .titlebar {
   display: flex;
   justify-content: space-between;

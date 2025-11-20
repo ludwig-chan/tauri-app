@@ -1,7 +1,8 @@
 use std::io::Cursor;
 use std::sync::Mutex;
 use std::collections::HashMap;
-use image::{ImageFormat, DynamicImage, ImageBuffer, Rgba};
+use std::fs;
+use image::{DynamicImage, ImageBuffer, Rgba};
 use screenshots::Screen;
 use serde::{Deserialize, Serialize};
 use tauri::{command, AppHandle, Manager};
@@ -18,6 +19,7 @@ pub struct ScreenshotResult {
     pub data: String, // base64 encoded image
     pub width: u32,
     pub height: u32,
+    pub file_path: Option<String>, // 保存的文件路径
 }
 
 // 全局状态存储截图数据
@@ -138,7 +140,47 @@ async fn capture_full_screen() -> Result<ScreenshotResult, String> {
         data: base64_data,
         width,
         height,
+        file_path: None,
     })
+}
+
+// 保存截图到文件系统
+#[command]
+pub async fn save_screenshot_to_file(
+    app: AppHandle,
+    image_data: String,
+) -> Result<String, String> {
+    // 获取应用数据目录
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    
+    // 创建 screenshots 目录
+    let screenshots_dir = app_data_dir.join("screenshots");
+    fs::create_dir_all(&screenshots_dir)
+        .map_err(|e| format!("Failed to create screenshots directory: {}", e))?;
+    
+    // 生成文件名（使用时间戳）
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let filename = format!("screenshot_{}.jpg", timestamp);
+    let file_path = screenshots_dir.join(&filename);
+    
+    // 解码 base64 数据
+    let image_bytes = general_purpose::STANDARD
+        .decode(&image_data)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+    
+    // 保存文件
+    fs::write(&file_path, image_bytes)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+    
+    // 返回文件路径（使用正斜杠，适配前端）
+    let path_str = file_path
+        .to_string_lossy()
+        .replace("\\", "/");
+    
+    println!("截图已保存到: {}", path_str);
+    
+    Ok(path_str)
 }
 
 async fn capture_window() -> Result<ScreenshotResult, String> {
@@ -182,6 +224,7 @@ pub async fn open_screenshot_window(
         data: image_data,
         width,
         height,
+        file_path: None,
     };
     
     store.data.lock().unwrap().insert(window_id.clone(), screenshot_result);
@@ -233,20 +276,17 @@ pub async fn get_screenshot_data(
         .ok_or_else(|| "Screenshot data not found".to_string())
 }
 
-// 触发截图（用于全局快捷键）
+// 触发截图(用于全局快捷键)
 pub async fn trigger_screenshot(app: AppHandle) -> Result<(), String> {
-    // 执行截图
-    let result = capture_full_screen().await?;
-    
-    // 打开窗口显示截图
-    open_screenshot_window(app, result.data, result.width, result.height).await?;
+    // 使用统一的 capture_and_show，确保截图被保存并显示
+    let _result = capture_and_show(app).await?;
     
     Ok(())
 }
 
 // 优化的截图命令：直接截图并显示，避免数据在前后端之间传输两次
 #[command]
-pub async fn capture_and_show(app: AppHandle) -> Result<String, String> {
+pub async fn capture_and_show(app: AppHandle) -> Result<ScreenshotResult, String> {
     use std::time::Instant;
     
     let total_start = Instant::now();
@@ -254,15 +294,21 @@ pub async fn capture_and_show(app: AppHandle) -> Result<String, String> {
     
     // 执行截图
     let start = Instant::now();
-    let result = capture_full_screen().await?;
+    let mut result = capture_full_screen().await?;
     println!(">>> 截图完成，耗时: {:?}", start.elapsed());
+    
+    // 保存到文件系统
+    let start = Instant::now();
+    let file_path = save_screenshot_to_file(app.clone(), result.data.clone()).await?;
+    result.file_path = Some(file_path);
+    println!(">>> 文件保存完成，耗时: {:?}", start.elapsed());
     
     // 直接打开窗口显示截图，返回窗口ID
     let start = Instant::now();
-    let window_id = open_screenshot_window(app, result.data, result.width, result.height).await?;
+    let _window_id = open_screenshot_window(app, result.data.clone(), result.width, result.height).await?;
     println!(">>> 窗口创建完成，耗时: {:?}", start.elapsed());
     
     println!(">>> capture_and_show 总耗时: {:?}\n", total_start.elapsed());
     
-    Ok(window_id)
+    Ok(result)
 }
