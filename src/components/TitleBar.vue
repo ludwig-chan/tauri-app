@@ -33,12 +33,14 @@
           </svg>
         </button>
         <div v-if="dropdownOpen" class="dropdown-menu">
-          <div class="dropdown-item" @click="navigateTo('/week')">📅 月历</div>
-          <div class="dropdown-item" @click="navigateTo('/clipboard')">📋 剪贴板</div>
-          <div class="dropdown-item" @click="navigateTo('/pomodoro')">🍅 番茄时钟</div>
-          <div class="dropdown-item" @click="navigateTo('/todos')">✅ 待办清单</div>
-          <div class="dropdown-item" @click="navigateTo('/random-alarm')">⏰ 随机闹钟</div>
-          <div class="dropdown-item" @click="navigateTo('/screenshot')">📸 截图</div>
+          <div
+            v-for="tab in navTabs"
+            :key="tab.path"
+            class="dropdown-item"
+            @click="navigateTo(tab.path)"
+          >
+            <span>{{ tab.emoji }}</span> {{ tab.label }}
+          </div>
         </div>
       </div>
       <button class="titlebar-button screenshot" @click="captureScreen" @mousedown.stop :disabled="isCapturing" title="截图">
@@ -81,6 +83,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useRouter } from 'vue-router'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { captureAndSave } from '../utils/screenshotService'
+import { navTabs } from '../utils/navTabs'
 
 defineProps<{
   isExpanded: boolean

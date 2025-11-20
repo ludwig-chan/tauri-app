@@ -1,27 +1,21 @@
 <template>
   <div class="tabs">
-    <router-link to="/week" class="tab" active-class="active">
-      <span class="tab-emoji" aria-label="月历">📅</span>
-      月历
-    </router-link>
-    <router-link to="/clipboard" class="tab" active-class="active">
-      <span class="tab-emoji" aria-label="剪贴板">📋</span>
-      剪贴板
-    </router-link>
-    <router-link to="/pomodoro" class="tab" active-class="active">
-      <span class="tab-emoji" aria-label="番茄时钟">🍅</span>
-      番茄时钟
-    </router-link>
-    <router-link to="/todos" class="tab" active-class="active">
-      <span class="tab-emoji" aria-label="待办清单">✅</span>
-      待办清单
-    </router-link>
-    <router-link to="/random-alarm" class="tab" active-class="active">
-      <span class="tab-emoji" aria-label="随机闹钟">⏰</span>
-      随机闹钟
+    <router-link
+      v-for="tab in navTabs"
+      :key="tab.path"
+      :to="tab.path"
+      class="tab"
+      active-class="active"
+    >
+      <span class="tab-emoji" :aria-label="tab.label">{{ tab.emoji }}</span>
+      {{ tab.label }}
     </router-link>
   </div>
 </template>
+
+<script setup lang="ts">
+import { navTabs } from '../utils/navTabs'
+</script>
 
 <style scoped>
 .tabs {

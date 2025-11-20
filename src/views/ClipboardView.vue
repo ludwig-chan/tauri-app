@@ -2,11 +2,31 @@
   <div class="clipboard-container">
     <div class="clipboard-header">
       <h2>剪贴板历史</h2>
-      <button @click="clearHistory" class="clear-btn">清空历史</button>
+      <div class="header-actions">
+        <button @click="showAddDialog = true" class="add-btn">新增记录</button>
+        <button @click="clearHistory" class="clear-btn">清空历史</button>
+      </div>
     </div>
     
     <div v-if="clipboardHistory.length === 0" class="empty-state">
       <p>暂无剪贴板历史</p>
+    </div>
+    
+    <!-- 新增记录对话框 -->
+    <div v-if="showAddDialog" class="dialog-overlay" @click="cancelAdd">
+      <div class="dialog-content" @click.stop>
+        <h3>新增记录</h3>
+        <textarea
+          v-model="newContent"
+          class="add-textarea"
+          placeholder="请输入内容..."
+          autofocus
+        ></textarea>
+        <div class="dialog-actions">
+          <button @click="addNewRecord" class="save-btn">添加</button>
+          <button @click="cancelAdd" class="cancel-btn">取消</button>
+        </div>
+      </div>
     </div>
     
     <div v-else class="clipboard-list">
@@ -14,13 +34,34 @@
         v-for="(item, index) in clipboardHistory"
         :key="index"
         class="clipboard-item"
-        @click="copyToClipboard(item.content)"
       >
         <div class="item-header">
           <span class="item-time">{{ formatTime(item.timestamp) }}</span>
-          <button @click.stop="deleteItem(index)" class="delete-btn">删除</button>
+          <div class="item-actions">
+            <button @click.stop="editItem(index)" class="edit-btn">编辑</button>
+            <button @click.stop="copyToClipboard(item.content)" class="copy-btn">复制</button>
+            <button @click.stop="deleteItem(index)" class="delete-btn">删除</button>
+          </div>
         </div>
-        <div class="item-content">{{ item.content }}</div>
+        <div 
+          v-if="editingIndex === index"
+          class="item-edit"
+        >
+          <textarea
+            v-model="editingContent"
+            class="edit-textarea"
+            @click.stop
+          ></textarea>
+          <div class="edit-actions">
+            <button @click.stop="saveEdit(index)" class="save-btn">保存</button>
+            <button @click.stop="cancelEdit" class="cancel-btn">取消</button>
+          </div>
+        </div>
+        <div 
+          v-else
+          class="item-content"
+          @click="copyToClipboard(item.content)"
+        >{{ item.content }}</div>
       </div>
     </div>
   </div>
@@ -28,6 +69,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { toast } from '@/utils/toast'
 
 interface ClipboardItem {
   content: string
@@ -35,6 +77,10 @@ interface ClipboardItem {
 }
 
 const clipboardHistory = ref<ClipboardItem[]>([])
+const editingIndex = ref<number | null>(null)
+const editingContent = ref<string>('')
+const showAddDialog = ref<boolean>(false)
+const newContent = ref<string>('')
 
 // 从 localStorage 加载历史记录
 const loadHistory = () => {
@@ -51,16 +97,21 @@ const saveHistory = () => {
 
 // 添加新的剪贴板内容
 const addToHistory = (content: string) => {
-  // 避免重复添加相同内容
-  const lastItem = clipboardHistory.value[0]
-  if (lastItem && lastItem.content === content) {
-    return
-  }
+  // 检查是否已存在相同内容
+  const existingIndex = clipboardHistory.value.findIndex(item => item.content === content)
   
-  clipboardHistory.value.unshift({
-    content,
-    timestamp: Date.now()
-  })
+  if (existingIndex !== -1) {
+    // 如果已存在，将其移到最前面
+    const existingItem = clipboardHistory.value.splice(existingIndex, 1)[0]
+    existingItem.timestamp = Date.now() // 更新时间戳
+    clipboardHistory.value.unshift(existingItem)
+  } else {
+    // 如果不存在，添加新项
+    clipboardHistory.value.unshift({
+      content,
+      timestamp: Date.now()
+    })
+  }
   
   // 限制历史记录数量为50条
   if (clipboardHistory.value.length > 50) {
@@ -74,11 +125,59 @@ const addToHistory = (content: string) => {
 const copyToClipboard = async (content: string) => {
   try {
     await navigator.clipboard.writeText(content)
-    alert('已复制到剪贴板')
+    toast.success('复制成功')
   } catch (err) {
     console.error('复制失败:', err)
-    alert('复制失败')
+    toast.error('复制失败')
   }
+}
+
+// 编辑项目
+const editItem = (index: number) => {
+  editingIndex.value = index
+  editingContent.value = clipboardHistory.value[index].content
+}
+
+// 保存编辑
+const saveEdit = (index: number) => {
+  if (editingContent.value.trim()) {
+    clipboardHistory.value[index].content = editingContent.value
+    clipboardHistory.value[index].timestamp = Date.now()
+    saveHistory()
+  }
+  cancelEdit()
+}
+
+// 取消编辑
+const cancelEdit = () => {
+  editingIndex.value = null
+  editingContent.value = ''
+}
+
+// 新增记录
+const addNewRecord = async () => {
+  if (newContent.value.trim()) {
+    // 添加到历史记录
+    addToHistory(newContent.value)
+    // 复制到系统剪贴板
+    try {
+      await navigator.clipboard.writeText(newContent.value)
+      toast.success('添加成功并已复制到剪贴板')
+    } catch (err) {
+      console.error('复制到剪贴板失败:', err)
+      toast.success('添加成功')
+    }
+    newContent.value = ''
+    showAddDialog.value = false
+  } else {
+    toast.warning('请输入内容')
+  }
+}
+
+// 取消新增
+const cancelAdd = () => {
+  showAddDialog.value = false
+  newContent.value = ''
 }
 
 // 删除单个项目
@@ -92,6 +191,7 @@ const clearHistory = () => {
   if (confirm('确定要清空所有剪贴板历史吗？')) {
     clipboardHistory.value = []
     saveHistory()
+    toast.success('已清空历史记录')
   }
 }
 
@@ -161,6 +261,26 @@ onMounted(() => {
   color: #333;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.add-btn {
+  padding: 8px 16px;
+  background: #42b983;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.add-btn:hover {
+  background: #359268;
+}
+
 .clear-btn {
   padding: 8px 16px;
   background: #f44336;
@@ -215,6 +335,29 @@ onMounted(() => {
   color: #999;
 }
 
+.item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-btn,
+.copy-btn {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid #42b983;
+  color: #42b983;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.edit-btn:hover,
+.copy-btn:hover {
+  background: #42b983;
+  color: white;
+}
+
 .delete-btn {
   padding: 4px 12px;
   background: transparent;
@@ -231,6 +374,118 @@ onMounted(() => {
   color: white;
 }
 
+.item-edit {
+  margin-top: 8px;
+}
+
+.edit-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 8px;
+  border: 1px solid #42b983;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.edit-textarea:focus {
+  outline: none;
+  border-color: #42b983;
+  box-shadow: 0 0 0 2px rgba(66, 185, 131, 0.2);
+}
+
+.edit-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.save-btn {
+  padding: 6px 16px;
+  background: #42b983;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.save-btn:hover {
+  background: #359268;
+}
+
+.cancel-btn {
+  padding: 6px 16px;
+  background: #999;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.cancel-btn:hover {
+  background: #666;
+}
+
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.dialog-content h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.add-textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+}
+
+.add-textarea:focus {
+  outline: none;
+  border-color: #42b983;
+  box-shadow: 0 0 0 2px rgba(66, 185, 131, 0.2);
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
 .item-content {
   color: #333;
   font-size: 14px;
@@ -241,6 +496,8 @@ onMounted(() => {
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 4;
+  line-clamp: 4;
   -webkit-box-orient: vertical;
+  cursor: pointer;
 }
 </style>

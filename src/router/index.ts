@@ -53,6 +53,12 @@ const routes = [
         name: 'SettingsView',
         component: SettingsView
       }
+      ,
+      {
+        path: 'app-usage',
+        name: 'AppUsageView',
+        component: () => import('../views/AppUsageView.vue')
+      }
     ]
   },
   {
