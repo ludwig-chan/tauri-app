@@ -7,6 +7,8 @@ export interface TodoItem {
   content: string
   completed: boolean
   due_date: string | null
+  expected_completion_time: string | null
+  reminder_time: string | null
   parent_id: number | null
   children?: TodoItem[]
   expanded?: boolean // 用于控制子项的展开/收起状态
@@ -41,12 +43,14 @@ export const useTodos = () => {
     try {
       isLoading.value = true
       const result = await selectSQL<TodoItem>(
-        'SELECT id, content, completed, due_date, parent_id FROM todos ORDER BY id DESC'
+        'SELECT id, content, completed, due_date, expected_completion_time, reminder_time, parent_id FROM todos ORDER BY id DESC'
       )
       const rawTodos = result.map(todo => ({
         ...todo,
         completed: Boolean(todo.completed),
         due_date: todo.due_date || null,
+        expected_completion_time: todo.expected_completion_time || null,
+        reminder_time: todo.reminder_time || null,
         parent_id: todo.parent_id || null,
         expanded: false
       }))
@@ -123,13 +127,19 @@ export const useTodos = () => {
   }
 
   // 添加待办事项
-  const addTodo = async (content: string, dueDate?: string | null, parentId?: number | null) => {
+  const addTodo = async (
+    content: string, 
+    dueDate?: string | null, 
+    parentId?: number | null,
+    expectedCompletionTime?: string | null,
+    reminderTime?: string | null
+  ) => {
     if (!content.trim()) return null
     
     try {
       const result = await execSQL(
-        'INSERT INTO todos (content, completed, due_date, parent_id) VALUES (?, ?, ?, ?) RETURNING id',
-        [content, false, dueDate || null, parentId || null]
+        'INSERT INTO todos (content, completed, due_date, expected_completion_time, reminder_time, parent_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
+        [content, false, dueDate || null, expectedCompletionTime || null, reminderTime || null, parentId || null]
       )
       
       const newTodo: TodoItem = {
@@ -137,6 +147,8 @@ export const useTodos = () => {
         content,
         completed: false,
         due_date: dueDate || null,
+        expected_completion_time: expectedCompletionTime || null,
+        reminder_time: reminderTime || null,
         parent_id: parentId || null,
         children: [],
         expanded: false
@@ -262,6 +274,48 @@ export const useTodos = () => {
     }
   }
 
+  // 更新待办事项期望完成时间
+  const updateTodoExpectedCompletionTime = async (id: number, expectedCompletionTime: string | null) => {
+    const todo = findTodoById(todos.value, id)
+    if (!todo) return false
+    
+    const originalTime = todo.expected_completion_time
+    try {
+      todo.expected_completion_time = expectedCompletionTime || null
+      
+      await execSQL(
+        'UPDATE todos SET expected_completion_time = ? WHERE id = ?',
+        [expectedCompletionTime || null, id]
+      )
+      return true
+    } catch (error) {
+      todo.expected_completion_time = originalTime
+      console.error('更新待办事项期望完成时间失败:', error)
+      throw error
+    }
+  }
+
+  // 更新待办事项提醒时间
+  const updateTodoReminderTime = async (id: number, reminderTime: string | null) => {
+    const todo = findTodoById(todos.value, id)
+    if (!todo) return false
+    
+    const originalTime = todo.reminder_time
+    try {
+      todo.reminder_time = reminderTime || null
+      
+      await execSQL(
+        'UPDATE todos SET reminder_time = ? WHERE id = ?',
+        [reminderTime || null, id]
+      )
+      return true
+    } catch (error) {
+      todo.reminder_time = originalTime
+      console.error('更新待办事项提醒时间失败:', error)
+      throw error
+    }
+  }
+
   // 删除待办事项
   const deleteTodo = async (id: number) => {
     try {
@@ -325,6 +379,8 @@ export const useTodos = () => {
     updateTodoStatus,
     updateTodoContent,
     updateTodoDate,
+    updateTodoExpectedCompletionTime,
+    updateTodoReminderTime,
     deleteTodo,
     getTodosForDate,
     toggleTodoExpanded,

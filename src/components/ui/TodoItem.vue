@@ -35,21 +35,34 @@
             ref="editInput"
             class="edit-input"
           />
-          <div v-if="todo.due_date" class="todo-date">
-            📅 {{ formatDate(todo.due_date) }}
+          <div class="todo-meta">
+            <div v-if="todo.expected_completion_time" class="todo-time">
+              ⏰ 期望完成: {{ formatDateTime(todo.expected_completion_time) }}
+            </div>
+            <div v-if="todo.reminder_time" class="todo-time reminder">
+              🔔 提醒: {{ formatDateTime(todo.reminder_time) }}
+            </div>
           </div>
         </div>
       </div>
 
       <div class="todo-actions">
-        <input 
-          v-if="!getEditingState(todo.id).editing"
-          v-model="todo.due_date"
-          type="date"
-          @change="$emit('updateDate', todo.id, todo.due_date || null)"
-          class="date-input-small"
-          :title="todo.due_date ? '修改日期' : '添加日期'"
-        />
+        <div class="time-inputs" v-if="!getEditingState(todo.id).editing">
+          <DateTimePicker
+            v-model="todo.expected_completion_time"
+            @update:modelValue="$emit('updateExpectedCompletionTime', todo.id, $event)"
+            icon="⏰"
+            placeholder="期望完成"
+            :title="'期望完成时间'"
+          />
+          <DateTimePicker
+            v-model="todo.reminder_time"
+            @update:modelValue="$emit('updateReminderTime', todo.id, $event)"
+            icon="🔔"
+            placeholder="提醒时间"
+            :title="'提醒时间'"
+          />
+        </div>
         <button @click="$emit('addSubtodo', todo.id)" class="add-subtodo-btn" title="添加子项">
           ➕
         </button>
@@ -67,7 +80,8 @@
         :editing-states="editingStates"
         @updateStatus="(id, value) => $emit('updateStatus', id, value)"
         @updateContent="(id, content) => $emit('updateContent', id, content)"
-        @updateDate="(id, date) => $emit('updateDate', id, date)"
+        @updateExpectedCompletionTime="(id, time) => $emit('updateExpectedCompletionTime', id, time)"
+        @updateReminderTime="(id, time) => $emit('updateReminderTime', id, time)"
         @addSubtodo="(id) => $emit('addSubtodo', id)"
         @deleteTodo="(id) => $emit('deleteTodo', id)"
       />
@@ -79,6 +93,7 @@
 import { ref, computed, nextTick } from 'vue'
 import type { TodoItem as TodoItemType } from '../../utils/todoStore'
 import Checkbox from './Checkbox.vue'
+import DateTimePicker from './DateTimePicker.vue'
 
 interface Props {
   todo: TodoItemType
@@ -94,7 +109,8 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   updateStatus: [id: number, value: boolean]
   updateContent: [id: number, content: string]
-  updateDate: [id: number, date: string | null]
+  updateExpectedCompletionTime: [id: number, time: string | null]
+  updateReminderTime: [id: number, time: string | null]
   addSubtodo: [parentId: number]
   deleteTodo: [id: number]
 }>()
@@ -108,14 +124,15 @@ const getEditingState = (id: number) => {
   return props.editingStates.get(id) || { editing: false }
 }
 
-// 格式化日期显示
-const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('zh-CN', {
-    month: 'long',
+// 格式化日期时间显示
+const formatDateTime = (dateTimeStr: string | null) => {
+  if (!dateTimeStr) return ''
+  const date = new Date(dateTimeStr)
+  return date.toLocaleString('zh-CN', {
+    month: 'short',
     day: 'numeric',
-    weekday: 'short'
+    hour: '2-digit',
+    minute: '2-digit'
   })
 }
 
@@ -221,28 +238,38 @@ const cancelEdit = (todo: TodoItemType) => {
   gap: 4px;
 }
 
-.todo-date {
+.todo-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.todo-time {
   font-size: 12px;
   color: #666;
-  background: #e3f2fd;
+  background: #fff3e0;
   padding: 2px 8px;
   border-radius: 12px;
   display: inline-block;
   width: fit-content;
 }
 
+.todo-time.reminder {
+  background: #fce4ec;
+}
+
 .todo-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
-.date-input-small {
-  padding: 4px 8px;
-  font-size: 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  min-width: 120px;
+.time-inputs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .add-subtodo-btn {
@@ -317,11 +344,12 @@ span {
   }
   
   .todo-actions {
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
   
-  .date-input-small {
-    min-width: 100px;
+  .time-inputs {
+    width: 100%;
+    flex-direction: column;
   }
 }
 </style>

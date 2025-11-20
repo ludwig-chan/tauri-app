@@ -19,14 +19,22 @@
             ref="todoInputRef"
           />
         </div>
-        
+
         <div class="input-group">
-          <label for="todo-date">日期</label>
-          <input 
-            id="todo-date"
-            v-model="todoDate"
-            type="date"
-            class="date-input"
+          <DateTimePicker
+            v-model="todoExpectedTime"
+            label="期望完成时间"
+            icon="⏰"
+            placeholder="选择期望完成时间"
+          />
+        </div>
+
+        <div class="input-group">
+          <DateTimePicker
+            v-model="todoReminderTime"
+            label="提醒时间"
+            icon="🔔"
+            placeholder="选择提醒时间"
           />
         </div>
       </div>
@@ -44,6 +52,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { todoStore } from '../../utils/todoStore'
+import DateTimePicker from './DateTimePicker.vue'
 import type { TodoItem } from '../../utils/todoStore'
 
 interface Props {
@@ -62,7 +71,8 @@ const emit = defineEmits<{
 }>()
 
 const todoContent = ref('')
-const todoDate = ref('')
+const todoExpectedTime = ref<string | null>(null)
+const todoReminderTime = ref<string | null>(null)
 const todoInputRef = ref<HTMLInputElement | null>(null)
 
 // 使用共享的待办事项状态管理
@@ -82,10 +92,6 @@ const formatSelectedDate = computed(() => {
 // 监听弹窗显示状态，设置初始日期和焦点
 watch(() => props.visible, (visible) => {
   if (visible) {
-    // 设置默认日期为选中的日期
-    if (props.selectedDate) {
-      todoDate.value = props.selectedDate.toISOString().split('T')[0]
-    }
     // 聚焦到输入框
     nextTick(() => {
       todoInputRef.value?.focus()
@@ -93,7 +99,8 @@ watch(() => props.visible, (visible) => {
   } else {
     // 清空输入内容
     todoContent.value = ''
-    todoDate.value = ''
+    todoExpectedTime.value = null
+    todoReminderTime.value = null
   }
 })
 
@@ -107,7 +114,13 @@ const addNewTodo = async () => {
   if (!todoContent.value.trim()) return
   
   try {
-    const newTodo = await addTodo(todoContent.value, todoDate.value || null)
+    const newTodo = await addTodo(
+      todoContent.value, 
+      null, // due_date 已移除
+      null,
+      todoExpectedTime.value, 
+      todoReminderTime.value
+    )
     
     if (newTodo) {
       // 触发事件，通知父组件待办事项已添加
@@ -227,8 +240,7 @@ watch(() => props.visible, (visible) => {
   font-size: 14px;
 }
 
-.todo-input,
-.date-input {
+.todo-input {
   width: 100%;
   padding: 12px 16px;
   border: 2px solid #e0e0e0;
@@ -238,8 +250,7 @@ watch(() => props.visible, (visible) => {
   box-sizing: border-box;
 }
 
-.todo-input:focus,
-.date-input:focus {
+.todo-input:focus {
   outline: none;
   border-color: #42b983;
   box-shadow: 0 0 0 3px rgba(66, 185, 131, 0.1);
@@ -342,8 +353,7 @@ watch(() => props.visible, (visible) => {
     margin-bottom: 16px;
   }
   
-  .todo-input,
-  .date-input {
+  .todo-input {
     padding: 10px 14px;
     font-size: 15px;
   }

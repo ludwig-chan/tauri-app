@@ -8,13 +8,21 @@
         placeholder="添加新的待办事项..."
         class="todo-input"
       />
-      <input 
-        v-model="newTodoDate"
-        type="date"
-        class="date-input"
-        placeholder="选择日期 (可选)"
-      />
-      <button @click="addNewTodo">添加</button>
+      <div class="time-pickers">
+        <DateTimePicker
+          v-model="newExpectedCompletionTime"
+          label="期望完成"
+          icon="⏰"
+          placeholder="选择期望完成时间"
+        />
+        <DateTimePicker
+          v-model="newReminderTime"
+          label="提醒时间"
+          icon="🔔"
+          placeholder="选择提醒时间"
+        />
+      </div>
+      <button @click="addNewTodo" class="add-btn">添加</button>
     </div>
 
     <div class="todo-list">
@@ -26,7 +34,8 @@
         :editing-states="editingStates"
         @updateStatus="handleUpdateTodoStatus"
         @updateContent="handleUpdateTodoContent"
-        @updateDate="handleUpdateTodoDate"
+        @updateExpectedCompletionTime="handleUpdateExpectedCompletionTime"
+        @updateReminderTime="handleUpdateReminderTime"
         @addSubtodo="openSubtodoDialog"
         @deleteTodo="handleDeleteTodo"
       />
@@ -46,10 +55,12 @@
 import { ref, onMounted } from 'vue'
 import TodoItem from '../components/ui/TodoItem.vue'
 import SubtodoDialog from '../components/ui/SubtodoDialog.vue'
+import DateTimePicker from '../components/ui/DateTimePicker.vue'
 import { todoStore } from '../utils/todoStore'
 
 const newTodo = ref('')
-const newTodoDate = ref('')
+const newExpectedCompletionTime = ref<string | null>(null)
+const newReminderTime = ref<string | null>(null)
 const subtodoDialogVisible = ref(false)
 const selectedParentId = ref<number | null>(null)
 
@@ -62,8 +73,9 @@ const {
   initializeTodos, 
   addTodo,
   updateTodoStatus, 
-  updateTodoContent, 
-  updateTodoDate, 
+  updateTodoContent,
+  updateTodoExpectedCompletionTime,
+  updateTodoReminderTime,
   deleteTodo 
 } = todoStore
 
@@ -80,9 +92,16 @@ const addNewTodo = async () => {
   if (!newTodo.value.trim()) return
   
   try {
-    await addTodo(newTodo.value, newTodoDate.value || null)
+    await addTodo(
+      newTodo.value, 
+      null, // due_date 已移除
+      null, // parent_id
+      newExpectedCompletionTime.value, 
+      newReminderTime.value
+    )
     newTodo.value = ''
-    newTodoDate.value = ''
+    newExpectedCompletionTime.value = null
+    newReminderTime.value = null
   } catch (error) {
     console.error('添加待办事项失败:', error)
   }
@@ -104,11 +123,19 @@ const handleUpdateTodoContent = async (id: number, content: string) => {
   }
 }
 
-const handleUpdateTodoDate = async (id: number, date: string | null) => {
+const handleUpdateExpectedCompletionTime = async (id: number, time: string | null) => {
   try {
-    await updateTodoDate(id, date)
+    await updateTodoExpectedCompletionTime(id, time)
   } catch (error) {
-    console.error('更新待办事项日期失败:', error)
+    console.error('更新待办事项期望完成时间失败:', error)
+  }
+}
+
+const handleUpdateReminderTime = async (id: number, time: string | null) => {
+  try {
+    await updateTodoReminderTime(id, time)
+  } catch (error) {
+    console.error('更新待办事项提醒时间失败:', error)
   }
 }
 
@@ -132,9 +159,15 @@ const closeSubtodoDialog = () => {
   selectedParentId.value = null
 }
 
-const handleAddSubtodo = async (content: string, dueDate: string | null, parentId: number) => {
+const handleAddSubtodo = async (
+  content: string, 
+  dueDate: string | null, 
+  parentId: number, 
+  expectedCompletionTime?: string | null, 
+  reminderTime?: string | null
+) => {
   try {
-    await addTodo(content, dueDate, parentId)
+    await addTodo(content, dueDate, parentId, expectedCompletionTime, reminderTime)
   } catch (error) {
     console.error('添加子待办事项失败:', error)
   }
@@ -155,39 +188,55 @@ const handleAddSubtodo = async (content: string, dueDate: string | null, parentI
 
 .input-area {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
+  align-items: flex-end;
 }
 
 .todo-input {
   flex: 1;
   min-width: 200px;
-  padding: 8px 12px;
-}
-
-.date-input {
-  min-width: 150px;
-  padding: 8px 12px;
-}
-
-input {
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
   font-size: 16px;
+  transition: all 0.2s ease;
 }
 
-button {
-  padding: 8px 16px;
-  background-color: #4CAF50;
+.todo-input:focus {
+  outline: none;
+  border-color: #42b983;
+  box-shadow: 0 0 0 3px rgba(66, 185, 131, 0.1);
+}
+
+.time-pickers {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.add-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #42b983 0%, #369970 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(66, 185, 131, 0.3);
 }
 
-button:hover {
-  background-color: #45a049;
+.add-btn:hover {
+  background: linear-gradient(135deg, #369970 0%, #2d8660 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(66, 185, 131, 0.4);
+}
+
+.add-btn:active {
+  transform: translateY(0);
 }
 
 .todo-list {
@@ -199,11 +248,20 @@ button:hover {
 @media (max-width: 768px) {
   .input-area {
     flex-direction: column;
+    align-items: stretch;
   }
   
-  .todo-input,
-  .date-input {
+  .todo-input {
     min-width: 100%;
+  }
+
+  .time-pickers {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .add-btn {
+    width: 100%;
   }
 }
 </style>

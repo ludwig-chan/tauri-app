@@ -19,14 +19,22 @@
             ref="contentInput"
           />
         </div>
-        
+
         <div class="input-group">
-          <label for="subtodo-date">截止日期（可选）：</label>
-          <input
-            id="subtodo-date"
-            v-model="subtodoDate"
-            type="date"
-            class="date-input"
+          <DateTimePicker
+            v-model="subtodoExpectedTime"
+            label="期望完成时间"
+            icon="⏰"
+            placeholder="选择期望完成时间"
+          />
+        </div>
+
+        <div class="input-group">
+          <DateTimePicker
+            v-model="subtodoReminderTime"
+            label="提醒时间"
+            icon="🔔"
+            placeholder="选择提醒时间"
           />
         </div>
       </div>
@@ -41,6 +49,7 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
+import DateTimePicker from './DateTimePicker.vue'
 
 interface Props {
   visible: boolean
@@ -51,11 +60,12 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<{
   close: []
-  add: [content: string, dueDate: string | null, parentId: number]
+  add: [content: string, dueDate: string | null, parentId: number, expectedCompletionTime?: string | null, reminderTime?: string | null]
 }>()
 
 const subtodoContent = ref('')
-const subtodoDate = ref('')
+const subtodoExpectedTime = ref<string | null>(null)
+const subtodoReminderTime = ref<string | null>(null)
 const contentInput = ref<HTMLInputElement | null>(null)
 
 // 当对话框打开时，聚焦输入框
@@ -67,7 +77,8 @@ watch(() => props.visible, (visible) => {
   } else {
     // 关闭时清空输入
     subtodoContent.value = ''
-    subtodoDate.value = ''
+    subtodoExpectedTime.value = null
+    subtodoReminderTime.value = null
   }
 })
 
@@ -78,7 +89,14 @@ const closeDialog = () => {
 const addSubtodo = () => {
   if (!subtodoContent.value.trim() || !props.parentId) return
   
-  emit('add', subtodoContent.value, subtodoDate.value || null, props.parentId)
+  emit(
+    'add', 
+    subtodoContent.value, 
+    null, // due_date 已移除
+    props.parentId,
+    subtodoExpectedTime.value,
+    subtodoReminderTime.value
+  )
   closeDialog()
 }
 </script>
@@ -166,8 +184,7 @@ const addSubtodo = () => {
   font-weight: 500;
 }
 
-.subtodo-input,
-.date-input {
+.subtodo-input {
   width: 100%;
   padding: 12px 16px;
   border: 1px solid #ddd;
@@ -176,8 +193,7 @@ const addSubtodo = () => {
   box-sizing: border-box;
 }
 
-.subtodo-input:focus,
-.date-input:focus {
+.subtodo-input:focus {
   outline: none;
   border-color: #4CAF50;
   box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);

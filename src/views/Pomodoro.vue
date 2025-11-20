@@ -4,9 +4,9 @@
     <h1>番茄时钟</h1>
     
     <!-- 待办事项选择区域 -->
-    <div class="todo-selection" v-if="!isRunning">
+    <div class="todo-selection">
       <label class="select-label">选择专注的任务：</label>
-      <select v-model="selectedTodoId" class="todo-select" :disabled="incompleteTodos.length === 0">
+      <select v-model="selectedTodoId" class="todo-select" :disabled="isRunning || incompleteTodos.length === 0">
         <option value="">{{ incompleteTodos.length === 0 ? '暂无待办事项' : '选择一个任务...' }}</option>
         <option 
           v-for="todo in incompleteTodos" 
@@ -18,21 +18,47 @@
       </select>
     </div>
 
-    <!-- 当前专注的任务显示 -->
-    <div v-if="currentFocusTodo && isRunning" class="current-task">
-      <div class="task-label">正在专注：</div>
-      <div class="task-content">{{ currentFocusTodo.content }}</div>
-      <div v-if="currentFocusTodo.due_date" class="task-date">截止：{{ currentFocusTodo.due_date }}</div>
+    <!-- 计时器显示/编辑区域 -->
+    <div class="timer-section">
+      <div v-if="!isEditing" class="timer" @click="enableEditing" :class="{ 'editable': !isRunning }">
+        {{ minutes }}:{{ seconds < 10 ? '0' + seconds : seconds }}
+      </div>
+      <div v-else class="timer-edit">
+        <input 
+          ref="timerInput"
+          type="number" 
+          v-model.number="inputMinutes" 
+          min="1" 
+          max="60"
+          @blur="applyMinutes"
+          @keyup.enter="applyMinutes"
+          class="timer-input"
+        />
+        <span class="unit">分钟</span>
+      </div>
+      
+      <!-- 快捷时长选项 -->
+      <div v-if="!isRunning" class="quick-timers">
+        <button 
+          v-for="time in [5, 10, 15, 25, 45]" 
+          :key="time"
+          @click="setQuickTime(time)"
+          class="quick-timer-btn"
+          :class="{ 'active': inputMinutes === time }"
+        >
+          {{ time }}分钟
+        </button>
+      </div>
     </div>
-
-    <div class="timer">{{ minutes }}:{{ seconds < 10 ? '0' + seconds : seconds }}</div>
     
     <div class="controls">
-      <button @click="startTimer" :disabled="isRunning || (!selectedTodoId && incompleteTodos.length > 0)">
-        {{ incompleteTodos.length === 0 ? '无任务可专注' : '开始' }}
+      <button 
+        @click="isRunning ? pauseTimer() : startTimer()" 
+        :disabled="!isRunning && (!selectedTodoId && incompleteTodos.length > 0)"
+      >
+        {{ isRunning ? '⏸️' : '▶️' }}
       </button>
-      <button @click="pauseTimer" :disabled="!isRunning">暂停</button>
-      <button @click="resetTimer">重置</button>
+      <button @click="resetTimer">🔄</button>
     </div>
     
     <!-- 番茄钟完成提示 -->
@@ -53,19 +79,11 @@
         </div>
       </div>
     </div>
-    
-    <div class="settings">
-      <label>
-        设置时长：
-        <input type="number" v-model.number="inputMinutes" min="1" max="60" /> 分钟
-      </label>
-      <button @click="applyMinutes">应用</button>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from 'vue';
+import { ref, watch, computed, onMounted, nextTick } from 'vue';
 import { todoStore, type TodoItem } from '../utils/todoStore';
 
 const defaultMinutes = 25;
@@ -73,6 +91,8 @@ const inputMinutes = ref(defaultMinutes);
 const minutes = ref(defaultMinutes);
 const seconds = ref(0);
 const isRunning = ref(false);
+const isEditing = ref(false);
+const timerInput = ref<HTMLInputElement | null>(null);
 const timer = ref<number | null>(null);
 const showCompletionDialog = ref(false);
 
@@ -160,12 +180,28 @@ function resetTimer() {
   selectedTodoId.value = null;
 }
 
+function enableEditing() {
+  if (!isRunning.value) {
+    isEditing.value = true;
+    nextTick(() => {
+      timerInput.value?.focus();
+      timerInput.value?.select();
+    });
+  }
+}
+
 function applyMinutes() {
   if (timer.value) clearInterval(timer.value);
   isRunning.value = false;
+  isEditing.value = false;
   showCompletionDialog.value = false;
   minutes.value = inputMinutes.value;
   seconds.value = 0;
+}
+
+function setQuickTime(time: number) {
+  inputMinutes.value = time;
+  applyMinutes();
 }
 
 // 处理任务完成
@@ -228,6 +264,12 @@ h1 {
   background: #f8f9fa;
   border-radius: 8px;
   border: 1px solid #e9ecef;
+  transition: all 0.3s;
+}
+
+.todo-selection:has(.todo-select:disabled) {
+  background: #e8f5e8;
+  border-color: #28a745;
 }
 
 .select-label {
@@ -249,43 +291,15 @@ h1 {
 }
 
 .todo-select:disabled {
-  background: #e9ecef;
-  color: #6c757d;
-  cursor: not-allowed;
-}
-
-/* 当前任务显示 */
-.current-task {
-  margin-bottom: 24px;
-  padding: 16px;
-  background: #e8f5e8;
-  border-radius: 8px;
-  border-left: 4px solid #28a745;
-}
-
-.task-label {
-  font-size: 12px;
-  color: #6c757d;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.task-content {
-  font-size: 16px;
-  font-weight: 600;
+  background: #fff;
   color: #155724;
-  margin-bottom: 4px;
-  line-height: 1.4;
+  cursor: not-allowed;
+  font-weight: 600;
 }
 
-.task-date {
-  font-size: 12px;
-  color: #856404;
-  background: #fff3cd;
-  padding: 4px 8px;
-  border-radius: 4px;
-  display: inline-block;
+/* 计时器编辑样式 */
+.timer-section {
+  position: relative;
 }
 
 .timer {
@@ -293,6 +307,52 @@ h1 {
   font-weight: bold;
   margin: 24px 0;
   color: #333;
+  transition: all 0.2s;
+}
+
+.timer.editable {
+  cursor: pointer;
+  color: #e74c3c;
+}
+
+.timer.editable:hover {
+  transform: scale(1.05);
+}
+
+.timer-edit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 24px 0;
+}
+
+.timer-input {
+  font-size: 2.5rem;
+  font-weight: bold;
+  width: 120px;
+  padding: 8px;
+  border: 2px solid #e74c3c;
+  border-radius: 8px;
+  text-align: center;
+  outline: none;
+}
+
+.timer-input:focus {
+  border-color: #c0392b;
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+}
+
+.unit {
+  font-size: 1.2rem;
+  color: #6c757d;
+}
+
+.timer-hint {
+  font-size: 0.875rem;
+  color: #999;
+  margin-top: -16px;
+  margin-bottom: 16px;
 }
 
 .controls button {
@@ -412,36 +472,87 @@ h1 {
   background: #545b62;
 }
 
-.settings {
-  margin-top: 24px;
-  font-size: 1rem;
-  padding-top: 20px;
-  border-top: 1px solid #e9ecef;
+/* 计时器编辑样式 */
+.timer-section {
+  position: relative;
 }
 
-.settings input {
-  width: 60px;
-  margin: 0 8px;
-  padding: 6px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  text-align: center;
+.timer {
+  font-size: 3rem;
+  font-weight: bold;
+  margin: 24px 0;
+  color: #333;
+  transition: all 0.2s;
 }
 
-.settings button {
-  margin-left: 10px;
-  padding: 6px 16px;
-  font-size: 1rem;
-  border: none;
-  border-radius: 6px;
-  background: #e67e22;
-  color: #fff;
+.timer.editable {
   cursor: pointer;
-  transition: background 0.2s;
+  color: #e74c3c;
 }
 
-.settings button:hover {
-  background: #d35400;
+.timer.editable:hover {
+  transform: scale(1.05);
+}
+
+.timer-edit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 24px 0;
+}
+
+.timer-input {
+  font-size: 2.5rem;
+  font-weight: bold;
+  width: 120px;
+  padding: 8px;
+  border: 2px solid #e74c3c;
+  border-radius: 8px;
+  text-align: center;
+  outline: none;
+}
+
+.timer-input:focus {
+  border-color: #c0392b;
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+}
+
+.unit {
+  font-size: 1.2rem;
+  color: #6c757d;
+}
+
+/* 快捷时长按钮 */
+.quick-timers {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.quick-timer-btn {
+  padding: 6px 12px;
+  border: 2px solid #e9ecef;
+  border-radius: 20px;
+  background: white;
+  color: #6c757d;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-timer-btn:hover {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.quick-timer-btn.active {
+  background: #e74c3c;
+  border-color: #e74c3c;
+  color: white;
 }
 
 /* 响应式设计 */

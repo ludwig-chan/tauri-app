@@ -10,6 +10,8 @@ export async function initializeTodoTable() {
             content TEXT NOT NULL,
             completed BOOLEAN NOT NULL DEFAULT 0,
             due_date DATE,
+            expected_completion_time DATETIME,
+            reminder_time DATETIME,
             parent_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (parent_id) REFERENCES todos (id) ON DELETE CASCADE
@@ -58,6 +60,34 @@ export async function initializeTodoTable() {
             // 忽略列已存在的错误
             if (!error.toString().includes('duplicate column name')) {
                 console.error('添加parent_id列失败:', error)
+            }
+        }
+
+        // 检查是否需要添加 expected_completion_time 列
+        const addExpectedCompletionTimeColumnSQL = `
+            ALTER TABLE todos ADD COLUMN expected_completion_time DATETIME
+        `
+        
+        try {
+            await execSQL(addExpectedCompletionTimeColumnSQL)
+            console.log('成功添加expected_completion_time列')
+        } catch (error: any) {
+            if (!error.toString().includes('duplicate column name')) {
+                console.error('添加expected_completion_time列失败:', error)
+            }
+        }
+
+        // 检查是否需要添加 reminder_time 列
+        const addReminderTimeColumnSQL = `
+            ALTER TABLE todos ADD COLUMN reminder_time DATETIME
+        `
+        
+        try {
+            await execSQL(addReminderTimeColumnSQL)
+            console.log('成功添加reminder_time列')
+        } catch (error: any) {
+            if (!error.toString().includes('duplicate column name')) {
+                console.error('添加reminder_time列失败:', error)
             }
         }
         
