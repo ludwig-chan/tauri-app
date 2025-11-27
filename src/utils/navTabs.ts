@@ -11,5 +11,6 @@ export const navTabs: NavTab[] = [
   { path: '/todos', emoji: '✅', label: '待办清单' },
   { path: '/random-alarm', emoji: '⏰', label: '随机闹钟' },
   { path: '/screenshot', emoji: '🖼️', label: '截图' },
+  { path: '/screen-record', emoji: '🎬', label: '录屏' },
   { path: '/app-usage', emoji: '⏲️', label: '应用时间监控' },
 ];

@@ -5,6 +5,7 @@ import Pomodoro from '../views/Pomodoro.vue'
 import WeekView from '../views/WeekView.vue'
 import ScreenshotView from '../views/ScreenshotView.vue'
 import ScreenshotWindowView from '../views/ScreenshotWindowView.vue'
+import ScreenRecordView from '../views/ScreenRecordView.vue'
 import ClipboardView from '../views/ClipboardView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import RandomAlarmView from '../views/RandomAlarmView.vue'
@@ -27,6 +28,11 @@ const routes = [
         path: 'screenshot',
         name: 'ScreenshotView',
         component: ScreenshotView
+      },
+      {
+        path: 'screen-record',
+        name: 'ScreenRecordView',
+        component: ScreenRecordView
       },
       {
         path: 'clipboard',
