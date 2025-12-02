@@ -1,4 +1,5 @@
 import { execSQL, initDB } from './db'
+import { AppUsageDB } from './appUsageDb'
 
 export async function initializeTodoTable() {
     await initDB()
@@ -92,6 +93,10 @@ export async function initializeTodoTable() {
         }
         
         console.log('Todo表初始化成功')
+        
+        // 初始化应用使用记录表
+        await AppUsageDB.initTable()
+        console.log('应用使用记录表初始化成功')
     } catch (error) {
         console.error('初始化Todo表失败:', error)
         throw error

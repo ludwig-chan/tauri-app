@@ -1,4 +1,5 @@
 mod screenshot;
+mod app_monitor;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -69,6 +70,7 @@ pub fn run() {
         .manage(screenshot::ScreenshotStore {
             data: Mutex::new(HashMap::new()),
         })
+        .manage(app_monitor::AppMonitor::new())
         .invoke_handler(tauri::generate_handler![
             greet,
             set_window_opacity,
@@ -78,7 +80,11 @@ pub fn run() {
             screenshot::open_screenshot_window,
             screenshot::get_screenshot_data,
             screenshot::capture_and_show,
-            screenshot::save_screenshot_to_file
+            screenshot::save_screenshot_to_file,
+            app_monitor::start_app_monitoring,
+            app_monitor::stop_app_monitoring,
+            app_monitor::get_current_app_info,
+            app_monitor::get_app_icon_by_path
         ])
         .setup(|app| {
             // 注册全局快捷键 F8 用于截图
