@@ -186,4 +186,148 @@ export class AppUsageDB {
         const results = await dbManager.select<{ date: string }>(sql)
         return results.map(r => r.date)
     }
+
+    /**
+     * 获取日期范围内的每日使用时长（用于趋势图）
+     */
+    static async getDailyUsageTrend(startDate: string, endDate: string): Promise<Array<{ date: string, total_duration: number }>> {
+        const sql = `
+            SELECT 
+                date,
+                SUM(duration) as total_duration
+            FROM app_usage
+            WHERE date BETWEEN ? AND ?
+            GROUP BY date
+            ORDER BY date ASC
+        `
+        
+        return await dbManager.select<any>(sql, [startDate, endDate])
+    }
+
+    /**
+     * 获取日期范围内每个应用的每日使用时长（用于堆叠趋势图）
+     */
+    static async getDailyAppUsageTrend(startDate: string, endDate: string, topN: number = 5): Promise<{
+        dates: string[],
+        apps: Array<{ app_name: string, data: number[] }>
+    }> {
+        // 首先获取 Top N 应用
+        const topApps = await this.getStatsByDateRange(startDate, endDate)
+        const topAppNames = topApps.slice(0, topN).map(app => app.app_name)
+        
+        if (topAppNames.length === 0) {
+            return { dates: [], apps: [] }
+        }
+
+        // 获取日期范围内所有日期
+        const sql = `
+            SELECT DISTINCT date 
+            FROM app_usage 
+            WHERE date BETWEEN ? AND ?
+            ORDER BY date ASC
+        `
+        const datesResult = await dbManager.select<{ date: string }>(sql, [startDate, endDate])
+        const dates = datesResult.map(d => d.date)
+
+        // 获取每个应用每天的使用时长
+        const placeholders = topAppNames.map(() => '?').join(',')
+        const detailSql = `
+            SELECT 
+                date,
+                app_name,
+                SUM(duration) as duration
+            FROM app_usage
+            WHERE date BETWEEN ? AND ? AND app_name IN (${placeholders})
+            GROUP BY date, app_name
+            ORDER BY date ASC
+        `
+        const details = await dbManager.select<any>(detailSql, [startDate, endDate, ...topAppNames])
+
+        // 构建结果
+        const appDataMap = new Map<string, Map<string, number>>()
+        topAppNames.forEach(name => appDataMap.set(name, new Map()))
+
+        details.forEach(item => {
+            appDataMap.get(item.app_name)?.set(item.date, item.duration)
+        })
+
+        const apps = topAppNames.map(appName => ({
+            app_name: appName,
+            data: dates.map(date => appDataMap.get(appName)?.get(date) || 0)
+        }))
+
+        return { dates, apps }
+    }
+
+    /**
+     * 获取日期范围内的总使用时长
+     */
+    static async getTotalDurationByDateRange(startDate: string, endDate: string): Promise<number> {
+        const sql = `
+            SELECT COALESCE(SUM(duration), 0) as total
+            FROM app_usage
+            WHERE date BETWEEN ? AND ?
+        `
+        const result = await dbManager.select<{ total: number }>(sql, [startDate, endDate])
+        return result[0]?.total || 0
+    }
+
+    /**
+     * 获取日期范围内的使用天数
+     */
+    static async getActiveDaysCount(startDate: string, endDate: string): Promise<number> {
+        const sql = `
+            SELECT COUNT(DISTINCT date) as count
+            FROM app_usage
+            WHERE date BETWEEN ? AND ?
+        `
+        const result = await dbManager.select<{ count: number }>(sql, [startDate, endDate])
+        return result[0]?.count || 0
+    }
+
+    /**
+     * 获取周统计数据（按周分组）
+     */
+    static async getWeeklyStats(weeks: number = 4): Promise<Array<{
+        week_start: string,
+        week_end: string,
+        total_duration: number,
+        app_count: number
+    }>> {
+        const sql = `
+            SELECT 
+                date(date, 'weekday 0', '-6 days') as week_start,
+                date(date, 'weekday 0') as week_end,
+                SUM(duration) as total_duration,
+                COUNT(DISTINCT app_name) as app_count
+            FROM app_usage
+            WHERE date >= date('now', '-' || ? || ' weeks')
+            GROUP BY week_start
+            ORDER BY week_start DESC
+        `
+        return await dbManager.select<any>(sql, [weeks])
+    }
+
+    /**
+     * 获取月统计数据（按月分组）
+     */
+    static async getMonthlyStats(months: number = 12): Promise<Array<{
+        month: string,
+        total_duration: number,
+        app_count: number,
+        active_days: number
+    }>> {
+        const sql = `
+            SELECT 
+                strftime('%Y-%m', date) as month,
+                SUM(duration) as total_duration,
+                COUNT(DISTINCT app_name) as app_count,
+                COUNT(DISTINCT date) as active_days
+            FROM app_usage
+            WHERE date >= date('now', '-' || ? || ' months')
+            GROUP BY month
+            ORDER BY month DESC
+        `
+        return await dbManager.select<any>(sql, [months])
+    }
 }
