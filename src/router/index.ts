@@ -58,8 +58,12 @@ const routes = [
         path: 'settings',
         name: 'SettingsView',
         component: SettingsView
-      }
-      ,
+      },
+      {
+        path: 'journal',
+        name: 'JournalView',
+        component: () => import('../views/JournalView.vue')
+      },
       {
         path: 'app-usage',
         name: 'AppUsageView',
