@@ -1,15 +1,82 @@
 <template>
   <div class="clipboard-container">
-    <div class="clipboard-header">
-      <h2>剪贴板历史</h2>
-      <div class="header-actions">
-        <button @click="showAddDialog = true" class="add-btn">新增记录</button>
-        <button @click="clearHistory" class="clear-btn">清空历史</button>
+    <!-- 当前剪贴板区域 -->
+    <div class="current-clipboard-section">
+      <div class="section-header">
+        <h2>当前剪贴板</h2>
+        <button @click="refreshCurrentClipboard" class="refresh-btn" title="刷新">
+          <span class="refresh-icon">↻</span>
+        </button>
+      </div>
+      <div class="current-clipboard-card" @click="copyToClipboard(currentClipboard)">
+        <div v-if="currentClipboard" class="current-content">
+          {{ currentClipboard }}
+        </div>
+        <div v-else class="current-empty">
+          剪贴板为空
+        </div>
+        <div class="current-actions">
+          <button 
+            v-if="currentClipboard" 
+            @click.stop="saveCurrentToHistory" 
+            class="save-current-btn"
+            title="保存到历史"
+          >
+            保存到历史
+          </button>
+        </div>
       </div>
     </div>
-    
-    <div v-if="clipboardHistory.length === 0" class="empty-state">
-      <p>暂无剪贴板历史</p>
+
+    <!-- 历史剪贴板区域 -->
+    <div class="history-clipboard-section">
+      <div class="section-header">
+        <h2>剪贴板历史</h2>
+        <div class="header-actions">
+          <button @click="showAddDialog = true" class="add-btn">新增记录</button>
+          <button @click="clearHistory" class="clear-btn">清空历史</button>
+        </div>
+      </div>
+      
+      <div v-if="displayHistory.length === 0" class="empty-state">
+        <p>暂无剪贴板历史</p>
+      </div>
+      
+      <div v-else class="clipboard-list">
+        <div
+          v-for="(item, index) in displayHistory"
+          :key="item.timestamp"
+          class="clipboard-item"
+        >
+          <div class="item-header">
+            <span class="item-time">{{ formatTime(item.timestamp) }}</span>
+            <div class="item-actions">
+              <button @click.stop="editItem(index)" class="edit-btn">编辑</button>
+              <button @click.stop="copyToClipboard(item.content)" class="copy-btn">复制</button>
+              <button @click.stop="deleteItem(index)" class="delete-btn">删除</button>
+            </div>
+          </div>
+          <div 
+            v-if="editingIndex === index"
+            class="item-edit"
+          >
+            <textarea
+              v-model="editingContent"
+              class="edit-textarea"
+              @click.stop
+            ></textarea>
+            <div class="edit-actions">
+              <button @click.stop="saveEdit(index)" class="save-btn">保存</button>
+              <button @click.stop="cancelEdit" class="cancel-btn">取消</button>
+            </div>
+          </div>
+          <div 
+            v-else
+            class="item-content"
+            @click="copyToClipboard(item.content)"
+          >{{ item.content }}</div>
+        </div>
+      </div>
     </div>
     
     <!-- 新增记录对话框 -->
@@ -28,47 +95,11 @@
         </div>
       </div>
     </div>
-    
-    <div v-else class="clipboard-list">
-      <div
-        v-for="(item, index) in clipboardHistory"
-        :key="index"
-        class="clipboard-item"
-      >
-        <div class="item-header">
-          <span class="item-time">{{ formatTime(item.timestamp) }}</span>
-          <div class="item-actions">
-            <button @click.stop="editItem(index)" class="edit-btn">编辑</button>
-            <button @click.stop="copyToClipboard(item.content)" class="copy-btn">复制</button>
-            <button @click.stop="deleteItem(index)" class="delete-btn">删除</button>
-          </div>
-        </div>
-        <div 
-          v-if="editingIndex === index"
-          class="item-edit"
-        >
-          <textarea
-            v-model="editingContent"
-            class="edit-textarea"
-            @click.stop
-          ></textarea>
-          <div class="edit-actions">
-            <button @click.stop="saveEdit(index)" class="save-btn">保存</button>
-            <button @click.stop="cancelEdit" class="cancel-btn">取消</button>
-          </div>
-        </div>
-        <div 
-          v-else
-          class="item-content"
-          @click="copyToClipboard(item.content)"
-        >{{ item.content }}</div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { toast } from '@/utils/toast'
 
 interface ClipboardItem {
@@ -77,7 +108,13 @@ interface ClipboardItem {
 }
 
 const clipboardHistory = ref<ClipboardItem[]>([])
+const currentClipboard = ref<string>('')
 const editingIndex = ref<number | null>(null)
+
+// 从第二条开始显示（跳过第一条，因为第一条就是当前剪贴板内容）
+const displayHistory = computed(() => {
+  return clipboardHistory.value.slice(1)
+})
 const editingContent = ref<string>('')
 const showAddDialog = ref<boolean>(false)
 const newContent = ref<string>('')
@@ -93,6 +130,25 @@ const loadHistory = () => {
 // 保存历史记录到 localStorage
 const saveHistory = () => {
   localStorage.setItem('clipboardHistory', JSON.stringify(clipboardHistory.value))
+}
+
+// 获取当前剪贴板内容
+const refreshCurrentClipboard = async () => {
+  try {
+    const text = await navigator.clipboard.readText()
+    currentClipboard.value = text || ''
+  } catch (err) {
+    console.log('读取剪贴板失败:', err)
+    currentClipboard.value = ''
+  }
+}
+
+// 保存当前剪贴板内容到历史
+const saveCurrentToHistory = () => {
+  if (currentClipboard.value && currentClipboard.value.trim()) {
+    addToHistory(currentClipboard.value)
+    toast.success('已保存到历史记录')
+  }
 }
 
 // 添加新的剪贴板内容
@@ -132,17 +188,19 @@ const copyToClipboard = async (content: string) => {
   }
 }
 
-// 编辑项目
+// 编辑项目（displayHistory 的索引需要 +1 才是 clipboardHistory 的真实索引）
 const editItem = (index: number) => {
+  const realIndex = index + 1
   editingIndex.value = index
-  editingContent.value = clipboardHistory.value[index].content
+  editingContent.value = clipboardHistory.value[realIndex].content
 }
 
 // 保存编辑
 const saveEdit = (index: number) => {
+  const realIndex = index + 1
   if (editingContent.value.trim()) {
-    clipboardHistory.value[index].content = editingContent.value
-    clipboardHistory.value[index].timestamp = Date.now()
+    clipboardHistory.value[realIndex].content = editingContent.value
+    clipboardHistory.value[realIndex].timestamp = Date.now()
     saveHistory()
   }
   cancelEdit()
@@ -180,9 +238,10 @@ const cancelAdd = () => {
   newContent.value = ''
 }
 
-// 删除单个项目
+// 删除单个项目（displayHistory 的索引需要 +1 才是 clipboardHistory 的真实索引）
 const deleteItem = (index: number) => {
-  clipboardHistory.value.splice(index, 1)
+  const realIndex = index + 1
+  clipboardHistory.value.splice(realIndex, 1)
   saveHistory()
 }
 
@@ -224,6 +283,9 @@ const startMonitoring = async () => {
         try {
           const text = await navigator.clipboard.readText()
           if (text && text.trim()) {
+            // 更新当前剪贴板显示
+            currentClipboard.value = text
+            // 自动添加到历史（如果内容变化）
             addToHistory(text)
           }
         } catch (err) {
@@ -238,6 +300,7 @@ const startMonitoring = async () => {
 
 onMounted(() => {
   loadHistory()
+  refreshCurrentClipboard()
   startMonitoring()
 })
 </script>
@@ -248,17 +311,110 @@ onMounted(() => {
   margin: 0 auto;
 }
 
-.clipboard-header {
+/* 当前剪贴板区域 */
+.current-clipboard-section {
+  margin-bottom: 32px;
+}
+
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
-.clipboard-header h2 {
+.section-header h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 20px;
   color: #333;
+}
+
+.refresh-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+  background: #42b983;
+  border-color: #42b983;
+  color: white;
+}
+
+.refresh-icon {
+  font-size: 18px;
+}
+
+.current-clipboard-card {
+  background: linear-gradient(135deg, #42b983 0%, #35495e 100%);
+  border-radius: 12px;
+  padding: 20px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 15px rgba(66, 185, 131, 0.3);
+  position: relative;
+}
+
+.current-clipboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(66, 185, 131, 0.4);
+}
+
+.current-content {
+  font-size: 15px;
+  line-height: 1.6;
+  word-break: break-all;
+  max-height: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
+  -webkit-box-orient: vertical;
+  white-space: pre-wrap;
+}
+
+.current-empty {
+  font-size: 14px;
+  opacity: 0.7;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.current-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.save-current-btn {
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.save-current-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* 历史剪贴板区域 */
+.history-clipboard-section {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 24px;
 }
 
 .header-actions {
