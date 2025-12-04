@@ -1,21 +1,79 @@
 <template>
   <div class="journal-view">
     <div class="journal-header">
-      <div class="type-selector">
-        <button
-          v-for="type in journalTypes"
-          :key="type.value"
-          :class="['type-btn', { active: currentType === type.value }]"
-          @click="currentType = type.value"
-        >
-          {{ type.icon }} {{ type.label }}
-        </button>
+      <IconDropdown
+        v-model="currentType"
+        :options="journalTypes"
+        placeholder="📝 日记"
+      />
+      <DatePicker v-model="currentDate" :mode="currentType" />
+    </div>
+
+    <!-- 天气、心情和地点选择器 -->
+    <div class="mood-weather-section">
+      <div class="selector-group" v-if="currentType === 'daily'">
+        <IconDropdown
+          v-model="weather"
+          :options="weatherOptions"
+          placeholder="🌤️ 天气"
+          @update:model-value="autoSave"
+        />
       </div>
-      <div class="date-navigator">
-        <button class="nav-btn" @click="navigateDate(-1)">←</button>
-        <span class="current-date">{{ formattedDate }}</span>
-        <button class="nav-btn" @click="navigateDate(1)">→</button>
-        <button class="today-btn" @click="goToToday">今天</button>
+      <div class="selector-group">
+        <IconDropdown
+          v-model="mood"
+          :options="moodOptions"
+          placeholder="😊 心情"
+          @update:model-value="autoSave"
+        />
+      </div>
+      <div class="selector-group location-group">
+        <span class="selector-label">📍</span>
+        <input
+          v-model="location"
+          type="text"
+          class="location-input"
+          placeholder="记录当前位置..."
+          @input="autoSave"
+        />
+      </div>
+    </div>
+
+    <!-- 标签区域 -->
+    <div class="tags-section">
+      <span class="tags-label">🏷️ 标签</span>
+      <div class="tags-container">
+        <span
+          v-for="tag in tags"
+          :key="tag"
+          class="tag-item"
+        >
+          {{ tag }}
+          <button class="tag-remove" @click="removeTag(tag)">×</button>
+        </span>
+        <div class="tag-input-wrapper">
+          <input
+            ref="tagInputRef"
+            v-model="tagInput"
+            type="text"
+            class="tag-input"
+            placeholder="输入或选择标签..."
+            @keydown.enter.prevent="addTag"
+            @keydown.comma.prevent="addTag"
+            @focus="showSuggestedTags = true"
+            @blur="handleTagInputBlur"
+          />
+          <div class="suggested-dropdown" v-show="showSuggestedTags && suggestedTags.length > 0">
+            <button
+              v-for="tag in suggestedTags"
+              :key="tag"
+              class="suggested-tag"
+              @mousedown.prevent="addSuggestedTag(tag)"
+            >
+              {{ tag }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -66,14 +124,22 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import DatePicker from '@/components/ui/DatePicker.vue'
+import IconDropdown from '@/components/ui/IconDropdown.vue'
 
 type JournalType = 'daily' | 'weekly' | 'monthly'
+type WeatherType = 'sunny' | 'cloudy' | 'overcast' | 'rainy' | 'stormy' | 'snowy' | 'windy' | 'foggy' | ''
+type MoodType = 'happy' | 'excited' | 'peaceful' | 'neutral' | 'tired' | 'sad' | 'anxious' | 'angry' | ''
 
 interface JournalEntry {
   id: number
   type: JournalType
   date: string
   content: string
+  weather?: WeatherType
+  mood?: MoodType
+  location?: string
+  tags?: string[]
   displayDate: string
   createdAt: string
   updatedAt: string
@@ -87,40 +153,82 @@ const journalTypes = [
   { value: 'monthly' as JournalType, label: '月记', icon: '📖' }
 ]
 
+const weatherOptions = [
+  { value: 'sunny' as WeatherType, label: '晴天', icon: '☀️' },
+  { value: 'cloudy' as WeatherType, label: '多云', icon: '⛅' },
+  { value: 'overcast' as WeatherType, label: '阴天', icon: '☁️' },
+  { value: 'rainy' as WeatherType, label: '下雨', icon: '🌧️' },
+  { value: 'stormy' as WeatherType, label: '雷雨', icon: '⛈️' },
+  { value: 'snowy' as WeatherType, label: '下雪', icon: '❄️' },
+  { value: 'windy' as WeatherType, label: '大风', icon: '💨' },
+  { value: 'foggy' as WeatherType, label: '雾霾', icon: '🌫️' }
+]
+
+const moodOptions = [
+  { value: 'happy' as MoodType, label: '开心', icon: '😊' },
+  { value: 'excited' as MoodType, label: '兴奋', icon: '🤩' },
+  { value: 'peaceful' as MoodType, label: '平静', icon: '😌' },
+  { value: 'neutral' as MoodType, label: '一般', icon: '😐' },
+  { value: 'tired' as MoodType, label: '疲惫', icon: '😫' },
+  { value: 'sad' as MoodType, label: '难过', icon: '😢' },
+  { value: 'anxious' as MoodType, label: '焦虑', icon: '😰' },
+  { value: 'angry' as MoodType, label: '生气', icon: '😠' }
+]
+
 const currentType = ref<JournalType>('daily')
 const currentDate = ref(new Date())
 const content = ref('')
+const weather = ref<WeatherType>('')
+const mood = ref<MoodType>('')
+const location = ref('')
+const tags = ref<string[]>([])
+const tagInput = ref('')
+const tagInputRef = ref<HTMLInputElement | null>(null)
+const showSuggestedTags = ref(false)
 const saveStatus = ref('未保存')
 const showHistory = ref(false)
 const historyEntries = ref<JournalEntry[]>([])
 const currentEntryId = ref<number | null>(null)
 
-let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
-
-const formattedDate = computed(() => {
-  const date = currentDate.value
-  switch (currentType.value) {
-    case 'daily':
-      return date.toLocaleDateString('zh-CN', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        weekday: 'long'
-      })
-    case 'weekly':
-      const weekStart = getWeekStart(date)
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekEnd.getDate() + 6)
-      return `${weekStart.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}`
-    case 'monthly':
-      return date.toLocaleDateString('zh-CN', {
-        year: 'numeric',
-        month: 'long'
-      })
-    default:
-      return ''
+// 从历史记录中提取常用标签
+const suggestedTags = computed(() => {
+  const allTags: Record<string, number> = {}
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key && key.startsWith('journal_')) {
+      try {
+        const entry: JournalEntry = JSON.parse(localStorage.getItem(key)!)
+        if (entry.tags) {
+          entry.tags.forEach(tag => {
+            allTags[tag] = (allTags[tag] || 0) + 1
+          })
+        }
+      } catch (e) {
+        // 忽略
+      }
+    }
   }
+  
+  // 预置标签列表
+  const presetTags = [
+    '工作', '学习', '生活', '旅行', '运动',
+    '读书', '灵感', '反思', '感恩', '目标'
+  ]
+  
+  // 合并历史标签和预置标签
+  const historyTags = Object.entries(allTags)
+    .sort((a, b) => b[1] - a[1])
+    .map(([tag]) => tag)
+  
+  // 优先显示历史常用标签，再补充预置标签
+  const combinedTags = [...new Set([...historyTags, ...presetTags])]
+  
+  return combinedTags
+    .filter(tag => !tags.value.includes(tag))
+    .slice(0, 6)
 })
+
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 function getWeekStart(date: Date): Date {
   const d = new Date(date)
@@ -144,24 +252,30 @@ function getDateKey(): string {
   }
 }
 
-function navigateDate(direction: number) {
-  const date = new Date(currentDate.value)
+// 格式化日期用于保存
+function getFormattedDate(): string {
+  const date = currentDate.value
   switch (currentType.value) {
     case 'daily':
-      date.setDate(date.getDate() + direction)
-      break
+      return date.toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+      })
     case 'weekly':
-      date.setDate(date.getDate() + direction * 7)
-      break
+      const weekStart = getWeekStart(date)
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 6)
+      return `${weekStart.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}`
     case 'monthly':
-      date.setMonth(date.getMonth() + direction)
-      break
+      return date.toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: 'long'
+      })
+    default:
+      return ''
   }
-  currentDate.value = date
-}
-
-function goToToday() {
-  currentDate.value = new Date()
 }
 
 function getTitle(): string {
@@ -195,6 +309,37 @@ function getTypeLabel(type: JournalType): string {
   return typeObj ? typeObj.label : ''
 }
 
+function addTag() {
+  const tag = tagInput.value.trim().replace(/,/g, '')
+  if (tag && !tags.value.includes(tag)) {
+    tags.value.push(tag)
+    autoSave()
+  }
+  tagInput.value = ''
+}
+
+function removeTag(tag: string) {
+  const index = tags.value.indexOf(tag)
+  if (index > -1) {
+    tags.value.splice(index, 1)
+    autoSave()
+  }
+}
+
+function addSuggestedTag(tag: string) {
+  if (!tags.value.includes(tag)) {
+    tags.value.push(tag)
+    autoSave()
+  }
+}
+
+function handleTagInputBlur() {
+  // 延迟隐藏，让 mousedown 事件有时间触发
+  setTimeout(() => {
+    showSuggestedTags.value = false
+  }, 150)
+}
+
 function autoSave() {
   saveStatus.value = '编辑中...'
   if (autoSaveTimer) {
@@ -213,7 +358,11 @@ async function saveJournal() {
       type: currentType.value,
       date: getDateKey(),
       content: content.value,
-      displayDate: formattedDate.value,
+      weather: weather.value,
+      mood: mood.value,
+      location: location.value,
+      tags: tags.value,
+      displayDate: getFormattedDate(),
       createdAt: currentEntryId.value
         ? localStorage.getItem(key)
           ? JSON.parse(localStorage.getItem(key)!).createdAt
@@ -238,10 +387,20 @@ function loadJournal() {
   if (saved) {
     const entry: JournalEntry = JSON.parse(saved)
     content.value = entry.content
+    weather.value = entry.weather || ''
+    mood.value = entry.mood || ''
+    location.value = entry.location || ''
+    tags.value = entry.tags || []
+    tagInput.value = ''
     currentEntryId.value = entry.id
     saveStatus.value = `上次保存于 ${new Date(entry.updatedAt).toLocaleTimeString('zh-CN')}`
   } else {
     content.value = ''
+    weather.value = ''
+    mood.value = ''
+    location.value = ''
+    tags.value = []
+    tagInput.value = ''
     currentEntryId.value = null
     saveStatus.value = '新建'
   }
@@ -330,77 +489,184 @@ watch(() => route.query, () => {
   gap: 12px;
 }
 
-.type-selector {
+.mood-weather-section {
   display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  flex-wrap: wrap;
+}
+
+.selector-group {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.type-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 20px;
-  background: #fff;
-  color: #666;
-  cursor: pointer;
+.selector-label {
   font-size: 14px;
+  color: #666;
+}
+
+.location-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.location-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+  background: #f9f9f9;
   transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  outline: none;
 }
 
-.type-btn:hover {
-  background: #e9ecef;
+.location-input:focus {
+  border-color: #42b983;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(66, 185, 131, 0.1);
 }
 
-.type-btn.active {
-  background: #42b983;
-  color: #fff;
+.location-input::placeholder {
+  color: #aaa;
 }
 
-.date-navigator {
+.tags-section {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.nav-btn {
-  width: 32px;
-  height: 32px;
+.tags-label {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.tag-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 16px;
+  font-size: 13px;
+}
+
+.tag-remove {
+  width: 16px;
+  height: 16px;
   border: none;
   border-radius: 50%;
-  background: #fff;
-  color: #333;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.nav-btn:hover {
-  background: #42b983;
-  color: #fff;
-}
-
-.current-date {
-  font-size: 16px;
-  font-weight: 500;
-  color: #333;
-  min-width: 200px;
-  text-align: center;
-}
-
-.today-btn {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 16px;
-  background: #42b983;
-  color: #fff;
+  background: rgba(0, 0, 0, 0.1);
+  color: #666;
   cursor: pointer;
   font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s;
 }
 
-.today-btn:hover {
-  background: #369970;
+.tag-remove:hover {
+  background: rgba(0, 0, 0, 0.2);
+  color: #333;
+}
+
+.tag-input-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 150px;
+}
+
+.tag-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px dashed #ccc;
+  border-radius: 16px;
+  font-size: 13px;
+  color: #333;
+  background: transparent;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.tag-input:focus {
+  border-color: #42b983;
+  border-style: solid;
+  background: #fff;
+}
+
+.tag-input::placeholder {
+  color: #aaa;
+}
+
+.suggested-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  padding: 8px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  z-index: 10;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.suggested-tag {
+  padding: 4px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 14px;
+  background: #fafafa;
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.suggested-tag:hover {
+  border-color: #42b983;
+  color: #42b983;
+  background: rgba(66, 185, 131, 0.08);
 }
 
 .journal-content {
