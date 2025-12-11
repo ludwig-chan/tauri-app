@@ -1,19 +1,24 @@
 <template>
   <div class="tabs" @wheel="handleWheel">
-    <router-link
-      v-for="tab in navTabs"
-      :key="tab.path"
-      :to="tab.path"
-      class="tab"
-      active-class="active"
-    >
-      {{ tab.label }}
-    </router-link>
+    <template v-for="(group, groupIndex) in navGroups" :key="group.name">
+      <!-- 分隔线（第一组不需要） -->
+      <div v-if="groupIndex > 0" class="separator"></div>
+      
+      <router-link
+        v-for="tab in group.tabs"
+        :key="tab.path"
+        :to="tab.path"
+        class="tab"
+        active-class="active"
+      >
+        {{ tab.label }}
+      </router-link>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { navTabs } from '../utils/navTabs'
+import { navGroups } from '../utils/navTabs'
 
 const handleWheel = (event: WheelEvent) => {
   const container = event.currentTarget as HTMLElement
@@ -36,10 +41,19 @@ const handleWheel = (event: WheelEvent) => {
   flex-wrap: nowrap;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE and Edge */
+  align-items: center;
 }
 
 .tabs::-webkit-scrollbar {
   display: none; /* Chrome, Safari and Opera */
+}
+
+.separator {
+  width: 1px;
+  height: 24px;
+  background: #d0d0d0;
+  flex-shrink: 0;
+  margin: 0 4px;
 }
 
 .tab {
