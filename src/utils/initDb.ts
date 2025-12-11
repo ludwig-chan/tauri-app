@@ -4,6 +4,17 @@ import { AppUsageDB } from './appUsageDb'
 export async function initializeTodoTable() {
     await initDB()
     
+    // 创建分组表
+    const createGroupsTableSQL = `
+        CREATE TABLE IF NOT EXISTS groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            color TEXT DEFAULT '#42b983',
+            sort_order INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `
+    
     // 创建待办事项表
     const createTableSQL = `
         CREATE TABLE IF NOT EXISTS todos (
@@ -14,8 +25,10 @@ export async function initializeTodoTable() {
             expected_completion_time DATETIME,
             reminder_time DATETIME,
             parent_id INTEGER,
+            group_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (parent_id) REFERENCES todos (id) ON DELETE CASCADE
+            FOREIGN KEY (parent_id) REFERENCES todos (id) ON DELETE CASCADE,
+            FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE SET NULL
         )
     `
     
@@ -31,6 +44,7 @@ export async function initializeTodoTable() {
     `
     
     try {
+        await execSQL(createGroupsTableSQL)
         await execSQL(createTableSQL)
         await execSQL(createScreenshotTableSQL)
         
@@ -89,6 +103,34 @@ export async function initializeTodoTable() {
         } catch (error: any) {
             if (!error.toString().includes('duplicate column name')) {
                 console.error('添加reminder_time列失败:', error)
+            }
+        }
+
+        // 检查是否需要添加 group_id 列
+        const addGroupIdColumnSQL = `
+            ALTER TABLE todos ADD COLUMN group_id INTEGER
+        `
+        
+        try {
+            await execSQL(addGroupIdColumnSQL)
+            console.log('成功添加group_id列')
+        } catch (error: any) {
+            if (!error.toString().includes('duplicate column name')) {
+                console.error('添加group_id列失败:', error)
+            }
+        }
+
+        // 检查是否需要添加 sort_order 列到groups表
+        const addSortOrderColumnSQL = `
+            ALTER TABLE groups ADD COLUMN sort_order INTEGER DEFAULT 0
+        `
+        
+        try {
+            await execSQL(addSortOrderColumnSQL)
+            console.log('成功添加sort_order列')
+        } catch (error: any) {
+            if (!error.toString().includes('duplicate column name')) {
+                console.error('添加sort_order列失败:', error)
             }
         }
         

@@ -10,12 +10,22 @@ export interface TodoItem {
   expected_completion_time: string | null
   reminder_time: string | null
   parent_id: number | null
+  group_id: number | null
   children?: TodoItem[]
   expanded?: boolean // 用于控制子项的展开/收起状态
 }
 
+export interface TodoGroup {
+  id: number
+  name: string
+  color: string
+  sort_order: number
+  created_at: string
+}
+
 // 全局状态管理
 const todos = ref<TodoItem[]>([])
+const groups = ref<TodoGroup[]>([])
 const isLoading = ref(false)
 const isInitialized = ref(false)
 
@@ -28,6 +38,7 @@ export const useTodos = () => {
     try {
       isLoading.value = true
       await initializeTodoTable()
+      await loadAllGroups()
       await loadAllTodos()
       isInitialized.value = true
     } catch (error) {
@@ -38,12 +49,26 @@ export const useTodos = () => {
     }
   }
 
+  // 加载所有分组
+  const loadAllGroups = async () => {
+    try {
+      const result = await selectSQL<TodoGroup>(
+        'SELECT id, name, color, sort_order, created_at FROM groups ORDER BY sort_order ASC, id ASC'
+      )
+      groups.value = result
+      console.log('加载分组成功:', groups.value)
+    } catch (error) {
+      console.error('加载分组失败:', error)
+      throw error
+    }
+  }
+
   // 加载所有待办事项
   const loadAllTodos = async () => {
     try {
       isLoading.value = true
       const result = await selectSQL<TodoItem>(
-        'SELECT id, content, completed, due_date, expected_completion_time, reminder_time, parent_id FROM todos ORDER BY id DESC'
+        'SELECT id, content, completed, due_date, expected_completion_time, reminder_time, parent_id, group_id FROM todos ORDER BY id DESC'
       )
       const rawTodos = result.map(todo => ({
         ...todo,
@@ -52,6 +77,7 @@ export const useTodos = () => {
         expected_completion_time: todo.expected_completion_time || null,
         reminder_time: todo.reminder_time || null,
         parent_id: todo.parent_id || null,
+        group_id: todo.group_id || null,
         expanded: false
       }))
       
@@ -132,14 +158,15 @@ export const useTodos = () => {
     dueDate?: string | null, 
     parentId?: number | null,
     expectedCompletionTime?: string | null,
-    reminderTime?: string | null
+    reminderTime?: string | null,
+    groupId?: number | null
   ) => {
     if (!content.trim()) return null
     
     try {
       const result = await execSQL(
-        'INSERT INTO todos (content, completed, due_date, expected_completion_time, reminder_time, parent_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
-        [content, false, dueDate || null, expectedCompletionTime || null, reminderTime || null, parentId || null]
+        'INSERT INTO todos (content, completed, due_date, expected_completion_time, reminder_time, parent_id, group_id) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id',
+        [content, false, dueDate || null, expectedCompletionTime || null, reminderTime || null, parentId || null, groupId || null]
       )
       
       const newTodo: TodoItem = {
@@ -150,6 +177,7 @@ export const useTodos = () => {
         expected_completion_time: expectedCompletionTime || null,
         reminder_time: reminderTime || null,
         parent_id: parentId || null,
+        group_id: groupId || null,
         children: [],
         expanded: false
       }
@@ -364,27 +392,149 @@ export const useTodos = () => {
     return allTodos.filter(todo => todo.due_date === null)
   })
 
+  // 添加分组
+  const addGroup = async (name: string, color: string = '#42b983') => {
+    if (!name.trim()) return null
+    
+    try {
+      // 获取当前最大的sort_order值
+      const maxOrder = groups.value.length > 0 
+        ? Math.max(...groups.value.map(g => g.sort_order || 0))
+        : -1
+      
+      const result = await execSQL(
+        'INSERT INTO groups (name, color, sort_order) VALUES (?, ?, ?) RETURNING id',
+        [name.trim(), color, maxOrder + 1]
+      )
+      
+      const newGroup: TodoGroup = {
+        id: result.lastInsertId,
+        name: name.trim(),
+        color,
+        sort_order: maxOrder + 1,
+        created_at: new Date().toISOString()
+      }
+      
+      groups.value.push(newGroup)
+      return newGroup
+    } catch (error) {
+      console.error('添加分组失败:', error)
+      throw error
+    }
+  }
+
+  // 更新分组
+  const updateGroup = async (id: number, name: string, color: string) => {
+    if (!name.trim()) return false
+    
+    const group = groups.value.find(g => g.id === id)
+    if (!group) return false
+    
+    const originalName = group.name
+    const originalColor = group.color
+    
+    try {
+      group.name = name.trim()
+      group.color = color
+      
+      await execSQL(
+        'UPDATE groups SET name = ?, color = ? WHERE id = ?',
+        [name.trim(), color, id]
+      )
+      return true
+    } catch (error) {
+      group.name = originalName
+      group.color = originalColor
+      console.error('更新分组失败:', error)
+      throw error
+    }
+  }
+
+  // 删除分组
+  const deleteGroup = async (id: number) => {
+    try {
+      await execSQL('DELETE FROM groups WHERE id = ?', [id])
+      groups.value = groups.value.filter(g => g.id !== id)
+      return true
+    } catch (error) {
+      console.error('删除分组失败:', error)
+      throw error
+    }
+  }
+
+  // 更新分组排序
+  const updateGroupOrder = async (reorderedGroups: TodoGroup[]) => {
+    try {
+      // 更新内存中的顺序
+      groups.value = reorderedGroups
+      
+      // 批量更新数据库中的sort_order
+      for (let i = 0; i < reorderedGroups.length; i++) {
+        const group = reorderedGroups[i]
+        group.sort_order = i
+        await execSQL(
+          'UPDATE groups SET sort_order = ? WHERE id = ?',
+          [i, group.id]
+        )
+      }
+      return true
+    } catch (error) {
+      console.error('更新分组排序失败:', error)
+      throw error
+    }
+  }
+
+  // 更新待办事项的分组
+  const updateTodoGroup = async (id: number, groupId: number | null) => {
+    const todo = findTodoById(todos.value, id)
+    if (!todo) return false
+    
+    const originalGroupId = todo.group_id
+    
+    try {
+      todo.group_id = groupId
+      
+      await execSQL(
+        'UPDATE todos SET group_id = ? WHERE id = ?',
+        [groupId, id]
+      )
+      return true
+    } catch (error) {
+      todo.group_id = originalGroupId
+      console.error('更新待办事项分组失败:', error)
+      throw error
+    }
+  }
+
   return {
     // 状态
     todos: getAllTodos,
     todosWithDates: getTodosWithDates,
     todosWithoutDates: getTodosWithoutDates,
+    groups: computed(() => groups.value),
     isLoading: computed(() => isLoading.value),
     isInitialized: computed(() => isInitialized.value),
 
     // 方法
     initializeTodos,
     loadAllTodos,
+    loadAllGroups,
     addTodo,
     updateTodoStatus,
     updateTodoContent,
     updateTodoDate,
     updateTodoExpectedCompletionTime,
     updateTodoReminderTime,
+    updateTodoGroup,
     deleteTodo,
     getTodosForDate,
     toggleTodoExpanded,
-    findTodoById
+    findTodoById,
+    // 分组方法
+    addGroup,
+    updateGroup,
+    deleteGroup,
+    updateGroupOrder
   }
 }
 

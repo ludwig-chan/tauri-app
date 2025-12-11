@@ -63,6 +63,18 @@
             :title="'提醒时间'"
           />
         </div>
+        <select 
+          v-if="level === 0" 
+          v-model="todo.group_id" 
+          @change="$emit('updateGroup', todo.id, todo.group_id)"
+          class="group-select-mini"
+          title="选择分组"
+        >
+          <option :value="null">未分组</option>
+          <option v-for="group in groups" :key="group.id" :value="group.id">
+            {{ group.name }}
+          </option>
+        </select>
         <button @click="$emit('addSubtodo', todo.id)" class="add-subtodo-btn" title="添加子项">
           ➕
         </button>
@@ -82,6 +94,7 @@
         @updateContent="(id, content) => $emit('updateContent', id, content)"
         @updateExpectedCompletionTime="(id, time) => $emit('updateExpectedCompletionTime', id, time)"
         @updateReminderTime="(id, time) => $emit('updateReminderTime', id, time)"
+        @updateGroup="(id, groupId) => $emit('updateGroup', id, groupId)"
         @addSubtodo="(id) => $emit('addSubtodo', id)"
         @deleteTodo="(id) => $emit('deleteTodo', id)"
       />
@@ -92,6 +105,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import type { TodoItem as TodoItemType } from '../../utils/todoStore'
+import { todoStore } from '../../utils/todoStore'
 import Checkbox from './Checkbox.vue'
 import DateTimePicker from './DateTimePicker.vue'
 
@@ -111,9 +125,12 @@ const emit = defineEmits<{
   updateContent: [id: number, content: string]
   updateExpectedCompletionTime: [id: number, time: string | null]
   updateReminderTime: [id: number, time: string | null]
+  updateGroup: [id: number, groupId: number | null]
   addSubtodo: [parentId: number]
   deleteTodo: [id: number]
 }>()
+
+const { groups } = todoStore
 
 const editInput = ref<HTMLInputElement | null>(null)
 
@@ -270,6 +287,20 @@ const cancelEdit = (todo: TodoItemType) => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.group-select-mini {
+  padding: 4px 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+  cursor: pointer;
+  max-width: 120px;
+}
+
+.group-select-mini:hover {
+  border-color: #42b983;
 }
 
 .add-subtodo-btn {
