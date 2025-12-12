@@ -47,38 +47,101 @@
       </div>
 
       <div class="todo-actions">
-        <div class="time-inputs" v-if="!getEditingState(todo.id).editing">
-          <DateTimePicker
-            v-model="todo.expected_completion_time"
-            @update:modelValue="$emit('updateExpectedCompletionTime', todo.id, $event)"
-            icon="⏰"
-            placeholder="期望完成"
-            :title="'期望完成时间'"
-          />
-          <DateTimePicker
-            v-model="todo.reminder_time"
-            @update:modelValue="$emit('updateReminderTime', todo.id, $event)"
-            icon="🔔"
-            placeholder="提醒时间"
-            :title="'提醒时间'"
-          />
+        <div class="actions-dropdown-wrapper">
+          <button 
+            @click="showActionsMenu = !showActionsMenu"
+            class="icon-button actions-toggle"
+            title="操作"
+          >
+            ⋯
+          </button>
+          <div v-if="showActionsMenu" class="actions-menu">
+            <div class="time-inputs" v-if="!getEditingState(todo.id).editing">
+              <div class="icon-button-wrapper">
+                <button 
+                  type="button"
+                  class="icon-button" 
+                  :class="{ 'has-value': todo.expected_completion_time }"
+                  @click.stop="showExpectedTimePicker = !showExpectedTimePicker"
+                  title="期望完成时间"
+                >
+                  ⏰
+                </button>
+                <div v-if="showExpectedTimePicker" class="picker-popup">
+                  <DateTimePicker
+                    v-model="todo.expected_completion_time"
+                    @update:modelValue="$emit('updateExpectedCompletionTime', todo.id, $event)"
+                    icon="⏰"
+                    placeholder="期望完成"
+                  />
+                </div>
+              </div>
+
+              <div class="icon-button-wrapper">
+                <button 
+                  type="button"
+                  class="icon-button" 
+                  :class="{ 'has-value': todo.reminder_time }"
+                  @click.stop="showReminderTimePicker = !showReminderTimePicker"
+                  title="提醒时间"
+                >
+                  🔔
+                </button>
+                <div v-if="showReminderTimePicker" class="picker-popup">
+                  <DateTimePicker
+                    v-model="todo.reminder_time"
+                    @update:modelValue="$emit('updateReminderTime', todo.id, $event)"
+                    icon="🔔"
+                    placeholder="提醒时间"
+                  />
+                </div>
+              </div>
+
+              <div v-if="level === 0" class="icon-button-wrapper">
+                <button 
+                  type="button"
+                  class="icon-button" 
+                  :class="{ 'has-value': todo.group_id !== null }"
+                  @click.stop="showGroupSelector = !showGroupSelector"
+                  title="选择分组"
+                >
+                  📁
+                </button>
+                <div v-if="showGroupSelector" class="picker-popup group-popup">
+                  <div class="popup-label">选择分组</div>
+                  <div class="group-options">
+                    <div 
+                      class="group-option" 
+                      :class="{ 'active': todo.group_id === null }"
+                      @click="selectGroup(null)"
+                    >
+                      未分组
+                    </div>
+                    <div 
+                      v-for="group in groups" 
+                      :key="group.id"
+                      class="group-option"
+                      :class="{ 'active': todo.group_id === group.id }"
+                      @click="selectGroup(group.id)"
+                    >
+                      <span v-if="group.color" class="group-color" :style="{ backgroundColor: group.color }"></span>
+                      {{ group.name }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="action-buttons">
+              <button @click.stop="handleAddSubtodo" class="icon-button" title="添加子项">
+                ➕
+              </button>
+              <button @click.stop="handleDelete" class="icon-button delete-icon-btn" title="删除">
+                🗑️
+              </button>
+            </div>
+          </div>
         </div>
-        <select 
-          v-if="level === 0" 
-          v-model="todo.group_id" 
-          @change="$emit('updateGroup', todo.id, todo.group_id)"
-          class="group-select-mini"
-          title="选择分组"
-        >
-          <option :value="null">未分组</option>
-          <option v-for="group in groups" :key="group.id" :value="group.id">
-            {{ group.name }}
-          </option>
-        </select>
-        <button @click="$emit('addSubtodo', todo.id)" class="add-subtodo-btn" title="添加子项">
-          ➕
-        </button>
-        <button @click="$emit('deleteTodo', todo.id)" class="delete-btn">删除</button>
       </div>
     </div>
 
@@ -103,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import type { TodoItem as TodoItemType } from '../../utils/todoStore'
 import { todoStore } from '../../utils/todoStore'
 import Checkbox from './Checkbox.vue'
@@ -133,6 +196,10 @@ const emit = defineEmits<{
 const { groups } = todoStore
 
 const editInput = ref<HTMLInputElement | null>(null)
+const showExpectedTimePicker = ref(false)
+const showReminderTimePicker = ref(false)
+const showGroupSelector = ref(false)
+const showActionsMenu = ref(false)
 
 const hasChildren = computed(() => props.todo.children && props.todo.children.length > 0)
 
@@ -185,6 +252,40 @@ const cancelEdit = (todo: TodoItemType) => {
   }
   props.editingStates.delete(todo.id)
 }
+
+const selectGroup = (groupId: number | null) => {
+  emit('updateGroup', props.todo.id, groupId)
+  showGroupSelector.value = false
+}
+
+const handleAddSubtodo = () => {
+  emit('addSubtodo', props.todo.id)
+  showActionsMenu.value = false
+}
+
+const handleDelete = () => {
+  emit('deleteTodo', props.todo.id)
+  showActionsMenu.value = false
+}
+
+// 点击外部关闭弹窗
+const handleClickOutside = (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+  if (!target.closest('.icon-button-wrapper') && !target.closest('.actions-dropdown-wrapper')) {
+    showExpectedTimePicker.value = false
+    showReminderTimePicker.value = false
+    showGroupSelector.value = false
+    showActionsMenu.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <style scoped>
@@ -283,52 +384,137 @@ const cancelEdit = (todo: TodoItemType) => {
   flex-wrap: wrap;
 }
 
+.actions-dropdown-wrapper {
+  position: relative;
+}
+
+.actions-toggle {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.actions-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1000;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+}
+
+.actions-menu .time-inputs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
 .time-inputs {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.group-select-mini {
-  padding: 4px 8px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 12px;
+.icon-button-wrapper {
+  position: relative;
+}
+
+.icon-button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.icon-button:hover {
+  background: #f5f5f5;
+  transform: scale(1.1);
+}
+
+.icon-button.has-value {
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%);
+}
+
+.picker-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1000;
   background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  min-width: 280px;
+}
+
+.group-popup {
+  min-width: 200px;
+  padding: 12px;
+}
+
+.popup-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+.group-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.group-option {
+  padding: 10px 12px;
+  border-radius: 6px;
   cursor: pointer;
-  max-width: 120px;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.group-select-mini:hover {
-  border-color: #42b983;
+.group-option:hover {
+  background: #f5f5f5;
 }
 
-.add-subtodo-btn {
-  background-color: #2196F3;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  cursor: pointer;
+.group-option.active {
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%);
+  color: #42b983;
+  font-weight: 500;
 }
 
-.add-subtodo-btn:hover {
-  background-color: #1976D2;
+.group-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.delete-btn {
-  background-color: #ff4444;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.delete-btn:hover {
-  background-color: #cc0000;
+.delete-icon-btn:hover {
+  background: #ffebee !important;
 }
 
 .completed {

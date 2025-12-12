@@ -1,33 +1,50 @@
 <template>
   <div class="datetime-picker">
-    <div class="picker-label" v-if="label">{{ label }}</div>
-    <div class="picker-wrapper" :class="{ 'has-value': modelValue, 'is-focused': isFocused }">
-      <div class="icon">{{ icon }}</div>
-      <input
-        :type="type"
-        :value="modelValue"
-        @input="handleInput"
-        @focus="isFocused = true"
-        @blur="isFocused = false"
-        :placeholder="placeholder"
-        class="picker-input"
-        :title="title"
-      />
+    <!-- 收缩模式：只显示图标 -->
+    <div v-if="compact && !isExpanded" class="compact-mode">
       <button
-        v-if="modelValue && clearable"
-        @click="clearValue"
-        class="clear-btn"
         type="button"
-        title="清除"
+        class="compact-icon-btn"
+        :class="{ 'has-value': modelValue }"
+        @click="toggleExpanded"
+        :title="title || placeholder"
       >
-        ×
+        {{ icon }}
       </button>
+    </div>
+
+    <!-- 展开模式：显示完整选择器 -->
+    <div v-else class="expanded-mode">
+      <div class="picker-label" v-if="label">{{ label }}</div>
+      <div class="picker-wrapper" :class="{ 'has-value': modelValue, 'is-focused': isFocused }">
+        <div class="icon">{{ icon }}</div>
+        <input
+          ref="inputRef"
+          :type="type"
+          :value="modelValue"
+          @input="handleInput"
+          @focus="isFocused = true"
+          @blur="handleBlur"
+          :placeholder="placeholder"
+          class="picker-input"
+          :title="title"
+        />
+        <button
+          v-if="modelValue && clearable"
+          @click="clearValue"
+          class="clear-btn"
+          type="button"
+          title="清除"
+        >
+          ×
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 
 interface Props {
   modelValue: string | null
@@ -37,6 +54,7 @@ interface Props {
   icon?: string
   clearable?: boolean
   title?: string
+  compact?: boolean  // 是否使用紧凑模式（只显示图标）
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -44,7 +62,8 @@ const props = withDefaults(defineProps<Props>(), {
   placeholder: '选择时间',
   icon: '📅',
   clearable: true,
-  title: ''
+  title: '',
+  compact: false
 })
 
 const emit = defineEmits<{
@@ -52,10 +71,31 @@ const emit = defineEmits<{
 }>()
 
 const isFocused = ref(false)
+const isExpanded = ref(false)
+const inputRef = ref<HTMLInputElement | null>(null)
+
+const toggleExpanded = async () => {
+  isExpanded.value = !isExpanded.value
+  if (isExpanded.value) {
+    await nextTick()
+    inputRef.value?.focus()
+    inputRef.value?.showPicker?.()
+  }
+}
 
 const handleInput = (event: Event) => {
   const target = event.target as HTMLInputElement
   emit('update:modelValue', target.value || null)
+}
+
+const handleBlur = () => {
+  isFocused.value = false
+  // 在紧凑模式下，失去焦点后收起
+  if (props.compact) {
+    setTimeout(() => {
+      isExpanded.value = false
+    }, 200)
+  }
 }
 
 const clearValue = () => {
@@ -65,6 +105,42 @@ const clearValue = () => {
 
 <style scoped>
 .datetime-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 紧凑模式样式 */
+.compact-mode {
+  display: inline-block;
+}
+
+.compact-icon-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.compact-icon-btn:hover {
+  background: #f5f5f5;
+  transform: scale(1.1);
+}
+
+.compact-icon-btn.has-value {
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%);
+}
+
+/* 展开模式样式 */
+.expanded-mode {
   display: flex;
   flex-direction: column;
   gap: 6px;

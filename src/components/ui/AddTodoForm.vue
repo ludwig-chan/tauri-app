@@ -11,75 +11,78 @@
       />
       
       <div class="icon-buttons">
-        <div class="icon-button-wrapper">
-          <button 
-            type="button"
-            class="icon-button" 
-            :class="{ 'has-value': expectedCompletionTime }"
-            @click="showExpectedTimePicker = !showExpectedTimePicker"
-            title="设置期望完成时间"
-          >
-            ⏰
-          </button>
-          <div v-if="showExpectedTimePicker" class="picker-popup">
-            <DateTimePicker 
-              v-model="expectedCompletionTime" 
-              label="期望完成" 
-              icon="⏰" 
-              placeholder="选择期望完成时间" 
-            />
-          </div>
-        </div>
+        <DateTimePicker 
+          v-model="expectedCompletionTime" 
+          icon="📅" 
+          placeholder="选择期望完成时间"
+          title="设置期望完成时间"
+          compact
+        />
 
-        <div class="icon-button-wrapper">
+        <div class="icon-button-wrapper more-options-wrapper">
           <button 
             type="button"
-            class="icon-button" 
-            :class="{ 'has-value': reminderTime }"
-            @click="showReminderTimePicker = !showReminderTimePicker"
-            title="设置提醒时间"
+            class="icon-button more-options-btn" 
+            :class="{ 'has-value': reminderTime || selectedGroupId !== null }"
+            @click="showMoreOptions = !showMoreOptions"
+            title="更多选项"
           >
-            🔔
+            ⋯
           </button>
-          <div v-if="showReminderTimePicker" class="picker-popup">
-            <DateTimePicker 
-              v-model="reminderTime" 
-              label="提醒时间" 
-              icon="🔔" 
-              placeholder="选择提醒时间" 
-            />
-          </div>
-        </div>
-
-        <div class="icon-button-wrapper">
-          <button 
-            type="button"
-            class="icon-button" 
-            :class="{ 'has-value': selectedGroupId !== null }"
-            @click="showGroupSelector = !showGroupSelector"
-            title="选择分组"
-          >
-            📁
-          </button>
-          <div v-if="showGroupSelector" class="picker-popup group-popup">
-            <div class="popup-label">选择分组</div>
-            <div class="group-options">
-              <div 
-                class="group-option" 
-                :class="{ 'active': selectedGroupId === null }"
-                @click="selectGroup(null)"
-              >
-                未分组
+          <div v-if="showMoreOptions" class="picker-popup more-options-popup">
+            <div class="more-options-content">
+              <div class="icon-button-wrapper">
+                <button 
+                  type="button"
+                  class="icon-button" 
+                  :class="{ 'has-value': reminderTime }"
+                  @click.stop="showReminderTimePicker = !showReminderTimePicker"
+                  title="设置提醒时间"
+                >
+                  🔔
+                </button>
+                <div v-if="showReminderTimePicker" class="picker-popup">
+                  <DateTimePicker 
+                    v-model="reminderTime" 
+                    label="提醒时间" 
+                    icon="🔔" 
+                    placeholder="选择提醒时间" 
+                  />
+                </div>
               </div>
-              <div 
-                v-for="group in groups" 
-                :key="group.id"
-                class="group-option"
-                :class="{ 'active': selectedGroupId === group.id }"
-                @click="selectGroup(group.id)"
-              >
-                <span v-if="group.color" class="group-color" :style="{ backgroundColor: group.color }"></span>
-                {{ group.name }}
+
+              <div class="icon-button-wrapper">
+                <button 
+                  type="button"
+                  class="icon-button" 
+                  :class="{ 'has-value': selectedGroupId !== null }"
+                  @click.stop="showGroupSelector = !showGroupSelector"
+                  title="选择分组"
+                >
+                  📁
+                </button>
+                <div v-if="showGroupSelector" class="picker-popup group-popup">
+                  <div class="popup-label">选择分组</div>
+                  <div class="group-options">
+                    <div 
+                      class="group-option" 
+                      :class="{ 'active': selectedGroupId === null }"
+                      @click="selectGroup(null)"
+                    >
+                      未分组
+                    </div>
+                    <div 
+                      v-for="group in groups" 
+                      :key="group.id"
+                      class="group-option"
+                      :class="{ 'active': selectedGroupId === group.id }"
+                      @click="selectGroup(group.id)"
+                    >
+                      <span v-if="group.color" class="group-color" :style="{ backgroundColor: group.color }"></span>
+                      {{ group.name }}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -122,6 +125,7 @@ const selectedGroupId = ref<number | null>(null)
 const showExpectedTimePicker = ref(false)
 const showReminderTimePicker = ref(false)
 const showGroupSelector = ref(false)
+const showMoreOptions = ref(false)
 const isFocused = ref(false)
 
 const selectGroup = (groupId: number | null) => {
@@ -145,15 +149,17 @@ const handleAdd = () => {
   reminderTime.value = null
   showExpectedTimePicker.value = false
   showReminderTimePicker.value = false
+  showMoreOptions.value = false
 }
 
 // 点击外部关闭弹窗
 const handleClickOutside = (event: MouseEvent) => {
   const target = event.target as HTMLElement
-  if (!target.closest('.icon-button-wrapper')) {
+  if (!target.closest('.icon-button-wrapper') && !target.closest('.more-options-wrapper')) {
     showExpectedTimePicker.value = false
     showReminderTimePicker.value = false
     showGroupSelector.value = false
+    showMoreOptions.value = false
   }
 }
 
@@ -211,8 +217,6 @@ onUnmounted(() => {
   display: flex;
   gap: 6px;
   align-items: center;
-  padding-left: 12px;
-  border-left: 1px solid #e0e0e0;
 }
 
 .icon-button-wrapper {
@@ -243,10 +247,26 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%);
 }
 
+.more-options-btn {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.more-options-popup {
+  min-width: auto;
+  padding: 12px;
+}
+
+.more-options-content {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .picker-popup {
   position: absolute;
   top: calc(100% + 8px);
-  left: 0;
+  right: 0;
   z-index: 1000;
   background: white;
   border: 2px solid #e0e0e0;
