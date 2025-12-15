@@ -18,7 +18,7 @@ export const navGroups: NavGroup[] = [
       { path: '/journal', emoji: '📓', label: '记录' },
       { path: '/pomodoro', emoji: '🍅', label: '番茄时钟' },
       { path: '/todos', emoji: '✅', label: '待办清单' },
-      { path: '/random-alarm', emoji: '⏰', label: '随机闹钟' },
+      { path: '/habit', emoji: '⏰', label: '习惯' },
     ],
   },
   {

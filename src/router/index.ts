@@ -9,6 +9,7 @@ import ScreenRecordView from '../views/ScreenRecordView.vue'
 import ClipboardView from '../views/ClipboardView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import RandomAlarmView from '../views/RandomAlarmView.vue'
+import HabitView from '../views/HabitView.vue'
 
 const routes = [
   {
@@ -53,6 +54,11 @@ const routes = [
         path: 'random-alarm',
         name: 'RandomAlarmView',
         component: RandomAlarmView
+      },
+      {
+        path: 'habit',
+        name: 'HabitView',
+        component: HabitView
       },
       {
         path: 'settings',

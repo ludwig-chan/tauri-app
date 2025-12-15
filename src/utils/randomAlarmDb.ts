@@ -22,7 +22,7 @@ export interface AlarmReminder {
 export async function initializeRandomAlarmTables() {
     await initDB()
     
-    // 创建随机闹钟表
+    // 创建习惯表
     const createAlarmTableSQL = `
         CREATE TABLE IF NOT EXISTS random_alarms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,9 +51,9 @@ export async function initializeRandomAlarmTables() {
     try {
         await execSQL(createAlarmTableSQL)
         await execSQL(createReminderTableSQL)
-        console.log('随机闹钟表初始化成功')
+        console.log('习惯表初始化成功')
     } catch (error) {
-        console.error('初始化随机闹钟表失败:', error)
+        console.error('初始化习惯表失败:', error)
         throw error
     }
 }

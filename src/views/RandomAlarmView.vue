@@ -1,14 +1,14 @@
 <template>
   <div class="random-alarm-container">
     <div class="header">
-      <h2>随机闹钟</h2>
-      <button @click="showAddDialog = true" class="add-btn">+ 添加闹钟</button>
+      <h2>习惯</h2>
+      <button @click="showAddDialog = true" class="add-btn">+ 添加习惯</button>
     </div>
 
     <div class="alarm-list">
       <div v-if="alarms.length === 0" class="empty-state">
-        <p>还没有设置任何闹钟</p>
-        <p class="hint">点击"添加闹钟"开始设置随机提醒任务</p>
+        <p>还没有设置任何习惯</p>
+        <p class="hint">点击"添加习惯"开始设置随机提醒任务</p>
       </div>
 
       <div v-for="alarm in alarms" :key="alarm.id" class="alarm-card">
@@ -54,10 +54,10 @@
       </div>
     </div>
 
-    <!-- 添加/编辑闹钟对话框 -->
+    <!-- 添加/编辑习惯对话框 -->
     <div v-if="showAddDialog" class="dialog-overlay" @click.self="closeDialog">
       <div class="dialog">
-        <h3>{{ editingAlarm ? '编辑闹钟' : '添加闹钟' }}</h3>
+        <h3>{{ editingAlarm ? '编辑习惯' : '添加习惯' }}</h3>
         <div class="form-group">
           <label>事件名称</label>
           <input 
@@ -178,7 +178,7 @@ async function saveAlarm() {
     closeDialog()
     scheduleAllReminders()
   } catch (error) {
-    console.error('保存闹钟失败:', error)
+    console.error('保存习惯失败:', error)
     alert('保存失败，请重试')
   }
 }
@@ -199,7 +199,7 @@ async function toggleActive(alarm: RandomAlarm) {
 }
 
 async function deleteAlarmConfirm(id: number) {
-  if (confirm('确定要删除这个闹钟吗？')) {
+  if (confirm('确定要删除这个习惯吗？')) {
     await deleteAlarm(id)
     await loadAlarms()
     scheduleAllReminders()
